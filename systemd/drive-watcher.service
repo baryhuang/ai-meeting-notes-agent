@@ -1,0 +1,16 @@
+[Unit]
+Description=Drive Watcher - Transcribe new audio/video files
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/ai-meeting-notes-agent
+ExecStart=/opt/ai-meeting-notes-agent/.venv/bin/python drive_watcher.py
+Restart=on-failure
+RestartSec=10
+EnvironmentFile=/opt/ai-meeting-notes-agent/.env
+
+[Install]
+WantedBy=multi-user.target

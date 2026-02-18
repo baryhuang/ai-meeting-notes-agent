@@ -1,0 +1,11 @@
+[Unit]
+Description=Sync files with Google Drive via rclone
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=%i
+WorkingDirectory=/opt/ai-meeting-notes-agent
+ExecStart=/opt/ai-meeting-notes-agent/scripts/rclone-sync.sh
+EnvironmentFile=/opt/ai-meeting-notes-agent/.env

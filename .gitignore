@@ -1,80 +1,29 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Environment
+.env
+.venv/
+__pycache__/
 
-/experiments
-
-# dependencies
-/node_modules
-**/models
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Media files
 *.mp4
-
-# testing
-/coverage
-/dist
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# Audio files
+*.mp3
 *.wav
+*.m4a
+*.aac
+*.ogg
+*.avi
+*.mov
+*.mkv
+*.webm
 
-# Large media files
-docs/demo.mov
-docs/demo.gif
+# Transcription output
+*.transcript.json
+*.transcript.txt
 
+# Tracker state
+processed_files.json
 
-meeting_minutes.db
+# OS
+.DS_Store
 
-# Added by Task Master AI
-# Logs
-logs
-*.log
-dev-debug.log
-# Dependency directories
-node_modules/
-# Environment variables
-.env
-# Editor directories and files
-.idea
-.vscode
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-experiments/
-.cursor/
-target/
-
-frontend/src-tauri/binaries/
-Cargo.lock
+# SQLite
+*.sqlite
