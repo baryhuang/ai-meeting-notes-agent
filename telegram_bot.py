@@ -80,7 +80,9 @@ async def _analyze_with_file_agent(question: str, bot_name: str) -> str | None:
 
     from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
 
-    data_path = str((DATA_DIR / bot_name).resolve())
+    bot_data_dir = DATA_DIR / bot_name
+    bot_data_dir.mkdir(parents=True, exist_ok=True)
+    data_path = str(bot_data_dir.resolve())
 
     options = ClaudeAgentOptions(
         system_prompt=(
