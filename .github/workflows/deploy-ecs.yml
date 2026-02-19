@@ -84,17 +84,24 @@ jobs:
                 }]
               }'
           }
-          # Ensure S3 write access for transcript storage
+          # Ensure S3 read/write/list access for file storage + startup sync
           aws iam put-role-policy \
             --role-name ecsTaskRole \
-            --policy-name S3TranscriptWriteAccess \
+            --policy-name S3TranscriptAccess \
             --policy-document '{
               "Version": "2012-10-17",
-              "Statement": [{
-                "Effect": "Allow",
-                "Action": ["s3:PutObject"],
-                "Resource": "arn:aws:s3:::'"${{ secrets.S3_BUCKET }}"'/*"
-              }]
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:PutObject", "s3:GetObject"],
+                  "Resource": "arn:aws:s3:::'"${{ secrets.S3_BUCKET }}"'/*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:ListBucket"],
+                  "Resource": "arn:aws:s3:::'"${{ secrets.S3_BUCKET }}"'"
+                }
+              ]
             }' 2>/dev/null || true
 
       - name: Register task definition

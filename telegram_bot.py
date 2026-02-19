@@ -8,6 +8,9 @@ Send a voice memo to the bot, get a summary + full transcript file back.
 Send text to chat with the AI assistant.
 Send any other file and it gets stored for you.
 
+All files are stored locally under data/{bot_name}/... and optionally
+synced to S3 with the exact same path structure.
+
 Usage:
     uv run telegram_bot.py
 """
@@ -31,9 +34,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Transcript storage directory (local fallback)
-TRANSCRIPTS_DIR = Path(__file__).parent / "transcripts"
-FILES_DIR = Path(__file__).parent / "files"
+# Unified local storage root — mirrors S3 key structure exactly
+DATA_DIR = Path(__file__).parent / "data"
 
 # Short transcripts are sent inline, long ones get summary + file
 INLINE_CHAR_LIMIT = 2000
@@ -63,14 +65,50 @@ def _get_s3_client():
     return s3, bucket
 
 
-def _upload_to_s3(s3_client, bucket: str, bot_name: str, username: str, timestamp: str, filename: str, data: bytes | str):
-    """Upload a file to S3 with bot/date/user structure."""
+def _sync_from_s3(s3_client, bucket: str, bot_name: str):
+    """On startup, sync all files from S3 to local data/ for this bot."""
+    logger.info(f"Syncing from s3://{bucket}/{bot_name}/ to {DATA_DIR}/{bot_name}/ ...")
+    paginator = s3_client.get_paginator('list_objects_v2')
+    count = 0
+    for page in paginator.paginate(Bucket=bucket, Prefix=f"{bot_name}/"):
+        for obj in page.get('Contents', []):
+            key = obj['Key']
+            local_path = DATA_DIR / key
+            # Skip if local file exists and is same size
+            if local_path.exists() and local_path.stat().st_size == obj['Size']:
+                continue
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            s3_client.download_file(bucket, key, str(local_path))
+            count += 1
+    logger.info(f"S3 sync complete: {count} files downloaded")
+
+
+def _storage_prefix(bot_name: str, username: str, timestamp: str) -> str:
+    """Build the relative path prefix used for both local and S3 storage.
+
+    Returns e.g.: transcribe-bot/2026/02/19/143022_Alice
+    """
     now = datetime.datetime.now()
-    key = f"{bot_name}/{now.strftime('%Y/%m/%d')}/{timestamp}_{username}/{filename}"
+    return f"{bot_name}/{now.strftime('%Y/%m/%d')}/{timestamp}_{username}"
+
+
+def _save_file(s3_client, s3_bucket: str | None, prefix: str, filename: str, data: bytes | str):
+    """Save a file locally under data/{prefix}/{filename} and optionally to S3."""
     body = data.encode('utf-8') if isinstance(data, str) else data
-    s3_client.put_object(Bucket=bucket, Key=key, Body=body)
-    logger.info(f"Uploaded to s3://{bucket}/{key}")
-    return key
+
+    # Always save locally
+    local_path = DATA_DIR / prefix / filename
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    local_path.write_bytes(body)
+    logger.info(f"Saved locally: {local_path}")
+
+    # Also upload to S3 if configured
+    if s3_client and s3_bucket:
+        key = f"{prefix}/{filename}"
+        s3_client.put_object(Bucket=s3_bucket, Key=key, Body=body)
+        logger.info(f"Uploaded to s3://{s3_bucket}/{key}")
+
+    return str(local_path)
 
 
 def _summarize(transcript_text: str) -> str | None:
@@ -111,15 +149,12 @@ def _chat(user_id: int, message: str) -> str | None:
 
     model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 
-    # Get or create history for this user
     if user_id not in _chat_histories:
         _chat_histories[user_id] = []
     history = _chat_histories[user_id]
 
-    # Add user message
     history.append({"role": "user", "content": message})
 
-    # Trim to max history
     if len(history) > MAX_HISTORY:
         history[:] = history[-MAX_HISTORY:]
 
@@ -142,7 +177,6 @@ def _chat(user_id: int, message: str) -> str | None:
         return reply
     except Exception as e:
         logger.error(f"Chat failed: {e}")
-        # Remove the failed user message from history
         history.pop()
         return None
 
@@ -165,11 +199,8 @@ def main():
 
     from src.transcription import transcribe_video, create_text_transcript
 
-    # Ensure storage dirs exist
-    TRANSCRIPTS_DIR.mkdir(exist_ok=True)
-    FILES_DIR.mkdir(exist_ok=True)
-    inbox = Path(__file__).parent / "inbox"
-    inbox.mkdir(exist_ok=True)
+    # Ensure storage root exists
+    DATA_DIR.mkdir(exist_ok=True)
 
     s3_client, s3_bucket = _get_s3_client()
     bot_name = os.getenv('BOT_NAME', 'transcribe-bot')
@@ -181,9 +212,12 @@ def main():
         logger.info("AI disabled (no OPENAI_API_KEY). Chat and summarization unavailable.")
 
     if s3_client:
-        logger.info(f"S3 storage enabled (bucket: {s3_bucket})")
+        logger.info(f"S3 storage enabled (bucket: {s3_bucket}) — local + S3 sync")
+        _sync_from_s3(s3_client, s3_bucket, bot_name)
     else:
-        logger.info("S3 storage disabled (no S3_BUCKET). Saving files locally.")
+        logger.info("S3 storage disabled (no S3_BUCKET). Saving files locally only.")
+
+    logger.info(f"Local storage: {DATA_DIR.resolve()}/{bot_name}/")
 
     async def start(update: Update, context):
         features = [
@@ -198,38 +232,24 @@ def main():
             parse_mode="Markdown"
         )
 
-    async def handle_voice(update: Update, context):
-        """Handle voice notes, audio files, and video files → transcribe."""
-        msg = update.message
+    async def _transcribe_and_reply(msg, file, ext):
+        """Common transcription logic for voice/audio/video messages and documents."""
         user = msg.from_user
-        logger.info(f"Received voice memo from {user.first_name} ({user.id})")
-
-        # Get the file object
-        if msg.voice:
-            file = await msg.voice.get_file()
-            ext = ".ogg"
-        elif msg.audio:
-            file = await msg.audio.get_file()
-            ext = _mime_to_ext(msg.audio.mime_type or "audio/ogg")
-        elif msg.video:
-            file = await msg.video.get_file()
-            ext = ".mp4"
-        elif msg.video_note:
-            file = await msg.video_note.get_file()
-            ext = ".mp4"
-        else:
-            # Should not reach here due to filter, but just in case
-            return
+        username = user.first_name or str(user.id)
+        timestamp = datetime.datetime.now().strftime("%H%M%S")
+        prefix = _storage_prefix(bot_name, username, timestamp)
 
         processing_msg = await msg.reply_text("Transcribing... this may take a minute.")
 
-        tmp_path = None
-        try:
-            tmp_path = str(inbox / f"tg_{user.id}_{msg.message_id}{ext}")
-            await file.download_to_drive(tmp_path)
-            logger.info(f"Downloaded audio to {tmp_path}")
+        # Download audio to the unified storage location
+        audio_filename = f"audio{ext}"
+        local_audio = DATA_DIR / prefix / audio_filename
+        local_audio.parent.mkdir(parents=True, exist_ok=True)
+        await file.download_to_drive(str(local_audio))
+        logger.info(f"Downloaded audio to {local_audio}")
 
-            segments = transcribe_video(tmp_path)
+        try:
+            segments = transcribe_video(str(local_audio))
 
             if not segments:
                 await processing_msg.edit_text("Sorry, I couldn't transcribe that audio. It might be too short or unclear.")
@@ -237,20 +257,13 @@ def main():
 
             transcript_text = _format_transcript(segments)
 
-            # Save to storage
-            timestamp = datetime.datetime.now().strftime("%H%M%S")
-            transcript_filename = f"{datetime.datetime.now().strftime('%Y-%m-%d')}_{timestamp}_{user.first_name}.txt"
-            username = user.first_name or str(user.id)
+            # Save audio + transcript (audio already on disk, just sync to S3)
+            with open(local_audio, 'rb') as f:
+                audio_bytes = f.read()
+            _save_file(s3_client, s3_bucket, prefix, audio_filename, audio_bytes)
+            _save_file(s3_client, s3_bucket, prefix, "transcript.txt", transcript_text)
 
-            if s3_client:
-                with open(tmp_path, 'rb') as f:
-                    _upload_to_s3(s3_client, s3_bucket, bot_name, username, timestamp, f"audio{ext}", f.read())
-                _upload_to_s3(s3_client, s3_bucket, bot_name, username, timestamp, "transcript.txt", transcript_text)
-            else:
-                transcript_path = TRANSCRIPTS_DIR / transcript_filename
-                transcript_path.write_text(transcript_text, encoding='utf-8')
-                logger.info(f"Saved transcript to {transcript_path}")
-
+            # Reply
             if len(transcript_text) <= INLINE_CHAR_LIMIT:
                 await processing_msg.edit_text(transcript_text, parse_mode="Markdown")
             else:
@@ -266,6 +279,7 @@ def main():
 
                 await processing_msg.edit_text(reply_text, parse_mode="Markdown")
 
+                transcript_filename = f"{datetime.datetime.now().strftime('%Y-%m-%d')}_{timestamp}_{username}.txt"
                 file_bytes = io.BytesIO(transcript_text.encode('utf-8'))
                 file_bytes.name = transcript_filename
                 await msg.reply_document(
@@ -274,15 +288,34 @@ def main():
                     caption="Full transcript with speaker labels and timestamps."
                 )
 
-            logger.info(f"Sent transcript to {user.first_name} ({len(segments)} segments)")
+            logger.info(f"Sent transcript to {username} ({len(segments)} segments)")
 
         except Exception as e:
-            logger.error(f"Transcription failed for {user.first_name}: {e}", exc_info=True)
+            logger.error(f"Transcription failed for {username}: {e}", exc_info=True)
             await processing_msg.edit_text(f"Sorry, transcription failed. Please try again.\nError: {str(e)[:200]}")
 
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+    async def handle_voice(update: Update, context):
+        """Handle voice notes, audio files, and video files → transcribe."""
+        msg = update.message
+        user = msg.from_user
+        logger.info(f"Received voice memo from {user.first_name} ({user.id})")
+
+        if msg.voice:
+            file = await msg.voice.get_file()
+            ext = ".ogg"
+        elif msg.audio:
+            file = await msg.audio.get_file()
+            ext = _mime_to_ext(msg.audio.mime_type or "audio/ogg")
+        elif msg.video:
+            file = await msg.video.get_file()
+            ext = ".mp4"
+        elif msg.video_note:
+            file = await msg.video_note.get_file()
+            ext = ".mp4"
+        else:
+            return
+
+        await _transcribe_and_reply(msg, file, ext)
 
     async def handle_text(update: Update, context):
         """Handle text messages → AI chat."""
@@ -308,7 +341,7 @@ def main():
             await msg.reply_text("Sorry, I couldn't process that. Please try again.")
 
     async def handle_document(update: Update, context):
-        """Handle non-audio/video documents → store the file."""
+        """Handle document uploads — route audio/video to transcription, store everything else."""
         msg = update.message
         user = msg.from_user
         doc = msg.document
@@ -318,10 +351,15 @@ def main():
 
         mime = doc.mime_type or ""
 
-        # Route audio/video documents to transcription
+        # Audio/video documents → transcribe
         if mime.startswith("audio/") or mime.startswith("video/"):
-            return await _handle_audio_document(update, context)
+            logger.info(f"Received audio/video document from {user.first_name} ({user.id})")
+            file = await doc.get_file()
+            ext = _mime_to_ext(mime) if mime.startswith("audio/") else ".mp4"
+            await _transcribe_and_reply(msg, file, ext)
+            return
 
+        # All other documents → store
         logger.info(f"Received file from {user.first_name}: {doc.file_name} ({mime})")
 
         processing_msg = await msg.reply_text("Saving your file...")
@@ -331,97 +369,16 @@ def main():
             filename = doc.file_name or f"file_{msg.message_id}"
             username = user.first_name or str(user.id)
             timestamp = datetime.datetime.now().strftime("%H%M%S")
+            prefix = _storage_prefix(bot_name, username, timestamp)
 
-            if s3_client:
-                # Download to memory and upload to S3
-                file_data = await file.download_as_bytearray()
-                key = _upload_to_s3(s3_client, s3_bucket, bot_name, username, timestamp, filename, bytes(file_data))
-                await processing_msg.edit_text(f"Saved: `{filename}`", parse_mode="Markdown")
-            else:
-                # Save locally
-                user_dir = FILES_DIR / username
-                user_dir.mkdir(exist_ok=True)
-                local_path = user_dir / f"{timestamp}_{filename}"
-                await file.download_to_drive(str(local_path))
-                logger.info(f"Saved file to {local_path}")
-                await processing_msg.edit_text(f"Saved: `{filename}`", parse_mode="Markdown")
+            file_data = await file.download_as_bytearray()
+            _save_file(s3_client, s3_bucket, prefix, filename, bytes(file_data))
+
+            await processing_msg.edit_text(f"Saved: `{filename}`", parse_mode="Markdown")
 
         except Exception as e:
             logger.error(f"File save failed for {user.first_name}: {e}", exc_info=True)
             await processing_msg.edit_text(f"Sorry, couldn't save the file.\nError: {str(e)[:200]}")
-
-    async def _handle_audio_document(update: Update, context):
-        """Route audio/video documents sent as files to transcription."""
-        msg = update.message
-        user = msg.from_user
-        doc = msg.document
-        mime = doc.mime_type or ""
-
-        logger.info(f"Received audio/video document from {user.first_name} ({user.id})")
-
-        if mime.startswith("audio/"):
-            ext = _mime_to_ext(mime)
-        else:
-            ext = ".mp4"
-
-        processing_msg = await msg.reply_text("Transcribing... this may take a minute.")
-
-        tmp_path = None
-        try:
-            file = await doc.get_file()
-            tmp_path = str(inbox / f"tg_{user.id}_{msg.message_id}{ext}")
-            await file.download_to_drive(tmp_path)
-            logger.info(f"Downloaded audio to {tmp_path}")
-
-            segments = transcribe_video(tmp_path)
-
-            if not segments:
-                await processing_msg.edit_text("Sorry, I couldn't transcribe that audio. It might be too short or unclear.")
-                return
-
-            transcript_text = _format_transcript(segments)
-
-            timestamp = datetime.datetime.now().strftime("%H%M%S")
-            transcript_filename = f"{datetime.datetime.now().strftime('%Y-%m-%d')}_{timestamp}_{user.first_name}.txt"
-            username = user.first_name or str(user.id)
-
-            if s3_client:
-                with open(tmp_path, 'rb') as f:
-                    _upload_to_s3(s3_client, s3_bucket, bot_name, username, timestamp, f"audio{ext}", f.read())
-                _upload_to_s3(s3_client, s3_bucket, bot_name, username, timestamp, "transcript.txt", transcript_text)
-            else:
-                transcript_path = TRANSCRIPTS_DIR / transcript_filename
-                transcript_path.write_text(transcript_text, encoding='utf-8')
-                logger.info(f"Saved transcript to {transcript_path}")
-
-            if len(transcript_text) <= INLINE_CHAR_LIMIT:
-                await processing_msg.edit_text(transcript_text, parse_mode="Markdown")
-            else:
-                await processing_msg.edit_text("Transcription done. Generating summary...")
-                summary = _summarize(transcript_text)
-                if summary:
-                    reply_text = f"*Summary:*\n\n{summary}"
-                else:
-                    preview = transcript_text[:1500] + "\n\n_(full transcript attached as file)_"
-                    reply_text = preview
-                await processing_msg.edit_text(reply_text, parse_mode="Markdown")
-                file_bytes = io.BytesIO(transcript_text.encode('utf-8'))
-                file_bytes.name = transcript_filename
-                await msg.reply_document(
-                    document=file_bytes,
-                    filename=transcript_filename,
-                    caption="Full transcript with speaker labels and timestamps."
-                )
-
-            logger.info(f"Sent transcript to {user.first_name} ({len(segments)} segments)")
-
-        except Exception as e:
-            logger.error(f"Transcription failed for {user.first_name}: {e}", exc_info=True)
-            await processing_msg.edit_text(f"Sorry, transcription failed. Please try again.\nError: {str(e)[:200]}")
-
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
 
     def _mime_to_ext(mime_type: str) -> str:
         mapping = {
@@ -451,14 +408,11 @@ def main():
     # Build and run — order matters: more specific filters first
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
-    # Voice/audio/video native types → transcribe
     app.add_handler(MessageHandler(
         filters.VOICE | filters.AUDIO | filters.VIDEO | filters.VIDEO_NOTE,
         handle_voice
     ))
-    # Documents (audio/video docs route to transcription internally, others get stored)
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-    # Text → AI chat
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     logger.info("Bot started. Listening for voice memos, text, and files...")
