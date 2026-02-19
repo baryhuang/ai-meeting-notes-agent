@@ -11,6 +11,8 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +22,14 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   useBotConfig,
   useSaveConfig,
   useRestartBot,
@@ -28,6 +38,7 @@ import {
 import { useBotStatus } from '@/hooks/use-bot-status';
 import { INITIAL_NODES, INITIAL_EDGES } from './pipeline-config';
 import { PipelineNode, PipelineContext } from './pipeline-node';
+import { Activity, Clock, AlertTriangle, Server, Globe } from 'lucide-react';
 
 const nodeTypes: NodeTypes = {
   pipeline: PipelineNode,
@@ -39,7 +50,6 @@ const edges: Edge[] = INITIAL_EDGES.map((e) => ({
   markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
 }));
 
-/** Map node IDs to display names and config groups */
 const NODE_META: Record<string, { name: string; configGroup: string }> = {
   telegram: { name: 'Telegram', configGroup: 'Telegram' },
   transcription: { name: 'Transcription', configGroup: 'Transcription' },
@@ -47,6 +57,39 @@ const NODE_META: Record<string, { name: string; configGroup: string }> = {
   chat: { name: 'Conversation', configGroup: 'Conversation' },
   file_analysis: { name: 'Claude Code Agent', configGroup: 'Claude Code Agent' },
 };
+
+function formatUptime(seconds: number | null): string {
+  if (seconds == null) return 'N/A';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function formatTimestamp(iso: string | null): string {
+  if (!iso) return 'Never';
+  return new Date(iso).toLocaleString();
+}
+
+function deploymentLabel(type: string): string {
+  switch (type) {
+    case 'aws-ecs': return 'AWS ECS';
+    case 'aws-ec2': return 'AWS EC2';
+    case 'docker': return 'Docker';
+    case 'systemd': return 'Systemd Service';
+    default: return 'Local';
+  }
+}
+
+function deploymentVariant(type: string) {
+  switch (type) {
+    case 'aws-ecs':
+    case 'aws-ec2': return 'warning' as const;
+    case 'docker': return 'info' as const;
+    case 'systemd': return 'primary' as const;
+    default: return 'secondary' as const;
+  }
+}
 
 function ConfigDialog({
   nodeId,
@@ -115,7 +158,6 @@ function ConfigDialog({
   );
 }
 
-
 export function SettingsPage() {
   const { data, isLoading, error } = useBotConfig();
   const { data: status } = useBotStatus();
@@ -182,7 +224,7 @@ export function SettingsPage() {
   if (isLoading) {
     return (
       <div className="container">
-        <div className="p-5 text-muted-foreground">Loading configuration...</div>
+        <div className="p-5 text-muted-foreground">Loading...</div>
       </div>
     );
   }
@@ -197,18 +239,73 @@ export function SettingsPage() {
     );
   }
 
+  const counters = status?.counters;
+  const recentErrors = status?.recent_errors ?? [];
+
   return (
     <div className="container">
       <div className="flex flex-col gap-5">
-        <div>
-          <h1 className="text-xl font-semibold">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Configure the bot pipeline. Click a node to edit its settings.
-          </p>
-        </div>
+
+        {/* ── Status bar ── */}
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 py-3">
+            <div className="flex items-center gap-2">
+              <Activity className="size-4 text-primary" />
+              <span className="font-semibold">{status?.bot_name ?? 'Bot'}</span>
+              {status ? (
+                <Badge variant="success" size="sm">Online</Badge>
+              ) : (
+                <Badge variant="secondary" size="sm">Offline</Badge>
+              )}
+            </div>
+            {status && (
+              <>
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Clock className="size-3.5" />
+                  Uptime: {formatUptime(status.uptime_seconds)}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Last activity: {formatTimestamp(status.last_activity)}
+                </div>
+              </>
+            )}
+            {counters && (
+              <div className="flex items-center gap-4 ml-auto text-sm">
+                <span><strong>{counters.transcriptions}</strong> transcriptions</span>
+                <span><strong>{counters.chats}</strong> chats</span>
+                <span><strong>{counters.files}</strong> files</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Deployment info ── */}
+        {status?.deployment && (
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-2 py-3 text-sm">
+              <div className="flex items-center gap-1.5">
+                <Server className="size-3.5 text-muted-foreground" />
+                <Badge variant={deploymentVariant(status.deployment.type)} appearance="light" size="sm">
+                  {deploymentLabel(status.deployment.type)}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Globe className="size-3.5" />
+                {status.deployment.hostname}
+                <span className="font-mono text-xs">({status.deployment.ip})</span>
+              </div>
+              {status.deployment.region && (
+                <span className="text-muted-foreground">{status.deployment.region}</span>
+              )}
+              <span className="text-muted-foreground">
+                Python {status.deployment.python} · {status.deployment.os}
+              </span>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── Pipeline diagram ── */}
-        <div className="h-[420px] rounded-xl border border-border bg-card">
+        <div className="h-[400px] rounded-xl border border-border bg-card">
           <ReactFlowProvider>
             <PipelineContext.Provider value={ctxValue}>
               <ReactFlow
@@ -234,6 +331,10 @@ export function SettingsPage() {
           </ReactFlowProvider>
         </div>
 
+        <p className="text-xs text-muted-foreground -mt-3">
+          Click a node to edit its settings.
+        </p>
+
         {/* ── Config dialog ── */}
         {selectedNode !== null && (
           <ConfigDialog
@@ -246,7 +347,7 @@ export function SettingsPage() {
         )}
 
         {/* ── Save buttons ── */}
-        <div className="flex gap-3 pb-5">
+        <div className="flex gap-3">
           <Button
             onClick={() => handleSave(false)}
             disabled={!hasChanges || saveConfig.isPending}
@@ -261,6 +362,42 @@ export function SettingsPage() {
             {restartBot.isPending ? 'Restarting...' : 'Save & Restart'}
           </Button>
         </div>
+
+        {/* ── Recent errors ── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <AlertTriangle className="size-4" />
+              Recent Errors
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentErrors.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2 text-center">No errors</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-48">Time</TableHead>
+                    <TableHead>Message</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentErrors.map((err, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatTimestamp(err.timestamp)}
+                      </TableCell>
+                      <TableCell className="text-sm">{err.message}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="pb-5" />
       </div>
     </div>
   );

@@ -2,6 +2,8 @@
 
 import asyncio
 import os
+import platform
+import socket
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +38,56 @@ CONFIG_SCHEMA = [
 ]
 
 _KNOWN_KEYS = {item["key"] for item in CONFIG_SCHEMA}
+
+
+def _detect_deployment() -> dict:
+    """Auto-detect the deployment environment."""
+    env_type = "local"
+    detail = platform.node() or "unknown"
+
+    # AWS ECS
+    if os.environ.get("ECS_CONTAINER_METADATA_URI") or os.environ.get("ECS_CONTAINER_METADATA_URI_V4"):
+        env_type = "aws-ecs"
+        cluster = os.environ.get("ECS_CLUSTER", "")
+        task_id = os.environ.get("ECS_TASK_ARN", "").rsplit("/", 1)[-1][:12] if os.environ.get("ECS_TASK_ARN") else ""
+        detail = f"{cluster}/{task_id}" if cluster else "ECS"
+    # AWS EC2
+    elif os.environ.get("AWS_EXECUTION_ENV") or (
+        os.path.exists("/sys/hypervisor/uuid") and open("/sys/hypervisor/uuid").read(3) == "ec2"
+    ):
+        env_type = "aws-ec2"
+        detail = platform.node()
+    # Docker (but not ECS)
+    elif os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
+        env_type = "docker"
+        detail = platform.node()
+    # Systemd service
+    elif os.environ.get("INVOCATION_ID"):
+        env_type = "systemd"
+        detail = platform.node()
+
+    region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or ""
+
+    return {
+        "type": env_type,
+        "hostname": platform.node(),
+        "ip": _get_local_ip(),
+        "region": region,
+        "detail": detail,
+        "python": platform.python_version(),
+        "os": f"{platform.system()} {platform.release()}",
+    }
+
+
+def _get_local_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 @app.get("/api/health")
@@ -80,6 +132,7 @@ async def status():
             "files": state.file_count,
         },
         "recent_errors": state.recent_errors,
+        "deployment": _detect_deployment(),
     }
 
 

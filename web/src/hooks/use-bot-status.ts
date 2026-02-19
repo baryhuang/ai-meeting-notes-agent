@@ -27,6 +27,15 @@ export interface BotStatus {
     files: number;
   };
   recent_errors: Array<{ timestamp: string; message: string }>;
+  deployment: {
+    type: 'local' | 'aws-ecs' | 'aws-ec2' | 'docker' | 'systemd';
+    hostname: string;
+    ip: string;
+    region: string;
+    detail: string;
+    python: string;
+    os: string;
+  };
 }
 
 async function fetchBotStatus(): Promise<BotStatus> {
