@@ -122,6 +122,9 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
     for k, v in agent_env.items():
         os.environ[k] = v
 
+    logger.info(f"Agent env: BASE_URL={agent_env['ANTHROPIC_BASE_URL']}, "
+                f"MODEL={glm_model}, apiKeySource={'ANTHROPIC_API_KEY+AUTH_TOKEN'}")
+
     options = ClaudeAgentOptions(
         system_prompt=(
             "You are a file analysis assistant. The user is asking about their stored files "
