@@ -18,6 +18,7 @@ Usage:
 import os
 import sys
 import io
+import json
 import logging
 import datetime
 from pathlib import Path
@@ -63,6 +64,100 @@ def _get_s3_client():
     region = os.getenv('AWS_REGION', 'us-east-1')
     s3 = boto3.client('s3', region_name=region)
     return s3, bucket
+
+
+async def _analyze_with_file_agent(question: str, bot_name: str) -> str | None:
+    """Run Claude Agent SDK pointed at GLM to autonomously analyze stored files.
+
+    The agent gets Read, Glob, Grep tools and is pointed at the data/ directory.
+    GLM's Anthropic-compatible endpoint is used as the backend via env vars:
+      ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic
+      ANTHROPIC_AUTH_TOKEN=<GLM_API_KEY>
+    """
+    glm_key = os.getenv('GLM_API_KEY')
+    if not glm_key:
+        return None
+
+    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+
+    data_path = str((DATA_DIR / bot_name).resolve())
+
+    options = ClaudeAgentOptions(
+        system_prompt=(
+            "You are a file analysis assistant. The user is asking about their stored files "
+            "(meeting transcripts, voice memo transcriptions, uploaded documents). "
+            "Browse the current directory to discover files, read the relevant ones, "
+            "and answer the user's question. Be concise and helpful. Use markdown formatting."
+        ),
+        allowed_tools=["Read", "Glob", "Grep"],
+        cwd=data_path,
+        max_turns=10,
+    )
+
+    # Point the agent at GLM's Anthropic-compatible endpoint
+    env_override = {
+        "ANTHROPIC_BASE_URL": "https://open.bigmodel.cn/api/anthropic",
+        "ANTHROPIC_AUTH_TOKEN": glm_key,
+    }
+    glm_model = os.getenv('GLM_MODEL')
+    if glm_model:
+        env_override["ANTHROPIC_DEFAULT_SONNET_MODEL"] = glm_model
+
+    # Temporarily set env vars for the agent subprocess
+    old_env = {}
+    for k, v in env_override.items():
+        old_env[k] = os.environ.get(k)
+        os.environ[k] = v
+
+    try:
+        result_parts = []
+        async for message in query(prompt=question, options=options):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        result_parts.append(block.text)
+
+        return "\n".join(result_parts) if result_parts else None
+
+    except Exception as e:
+        logger.error(f"Claude Agent SDK (GLM) failed: {e}")
+        return None
+
+    finally:
+        # Restore original env
+        for k, v in old_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+# Tool definition for OpenAI function calling (intent detection)
+_CHAT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_stored_files",
+            "description": (
+                "Search and analyze the user's stored files (transcripts, meeting notes, uploaded documents). "
+                "Call this when the user asks about their past meetings, transcripts, uploaded files, "
+                "or wants to find/analyze/summarize content from stored files. "
+                "Examples: 'what did we discuss yesterday?', 'find my transcript from Monday', "
+                "'summarize all meetings this week', 'what files have I uploaded?'"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The user's question about their stored files"
+                    }
+                },
+                "required": ["question"]
+            }
+        }
+    }
+]
 
 
 def _sync_from_s3(s3_client, bucket: str, bot_name: str):
@@ -141,8 +236,12 @@ def _summarize(transcript_text: str) -> str | None:
         return None
 
 
-def _chat(user_id: int, message: str) -> str | None:
-    """Chat with AI, maintaining per-user conversation history."""
+async def _chat(user_id: int, message: str, bot_name: str) -> str | None:
+    """Chat with AI. Uses OpenAI tool calling to detect file analysis intent.
+
+    Normal chat → OpenAI-compatible endpoint responds directly.
+    File analysis → OpenAI detects intent via tool call → GLM Claude agent analyzes files.
+    """
     client = _get_openai_client()
     if not client:
         return None
@@ -163,18 +262,47 @@ def _chat(user_id: int, message: str) -> str | None:
             {"role": "system", "content": (
                 "You are a helpful assistant integrated into a Telegram bot. "
                 "You help with meeting notes, transcription questions, and general tasks. "
-                "Be concise and conversational. Use markdown formatting when helpful."
+                "Be concise and conversational. Use markdown formatting when helpful. "
+                "When the user asks about their stored files, transcripts, or past meetings, "
+                "use the search_stored_files tool to look up and analyze their data."
             )},
             *history
         ]
+
+        # First call — may return a tool call or a direct response
         response = client.chat.completions.create(
             model=model,
             messages=messages,
+            tools=_CHAT_TOOLS,
             max_tokens=1024,
         )
-        reply = response.choices[0].message.content
+
+        choice = response.choices[0]
+
+        # Direct response — no tool call, normal chat
+        if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+            reply = choice.message.content
+            history.append({"role": "assistant", "content": reply})
+            return reply
+
+        # Tool call detected — delegate to GLM Claude file agent
+        tool_call = choice.message.tool_calls[0]
+        args = json.loads(tool_call.function.arguments)
+        question = args.get("question", message)
+
+        logger.info(f"Intent: file analysis → delegating to GLM Claude agent (question={question!r})")
+
+        # Spawn GLM Claude agent with file tools
+        analysis = await _analyze_with_file_agent(question, bot_name)
+
+        if analysis:
+            reply = analysis
+        else:
+            reply = "Sorry, I couldn't analyze your files right now. Please try again."
+
         history.append({"role": "assistant", "content": reply})
         return reply
+
     except Exception as e:
         logger.error(f"Chat failed: {e}")
         history.pop()
@@ -210,6 +338,11 @@ def main():
         logger.info("AI enabled (OPENAI_API_KEY configured) — chat + summarization active")
     else:
         logger.info("AI disabled (no OPENAI_API_KEY). Chat and summarization unavailable.")
+
+    if os.getenv('GLM_API_KEY'):
+        logger.info("GLM Claude Agent enabled — file analysis via Claude Agent SDK + GLM backend")
+    else:
+        logger.info("GLM Claude Agent disabled (no GLM_API_KEY). File Q&A unavailable.")
 
     if s3_client:
         logger.info(f"S3 storage enabled (bucket: {s3_bucket}) — local + S3 sync")
@@ -334,7 +467,7 @@ def main():
             )
             return
 
-        reply = _chat(user.id, text)
+        reply = await _chat(user.id, text, bot_name)
         if reply:
             await msg.reply_text(reply, parse_mode="Markdown")
         else:

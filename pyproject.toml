@@ -10,5 +10,6 @@ dependencies = [
     "zhconv==1.4.3",
     "python-telegram-bot>=21.0",
     "openai>=1.0.0",
+    "claude-agent-sdk>=0.1.0",
     "boto3>=1.34.0",
 ]
