@@ -8,6 +8,8 @@
 
 Want to own it? Self-host this repo with your own API keys. Free forever. MIT licensed.
 
+<img width="1418" height="715" alt="notesly_deployment_config_sample" src="https://github.com/user-attachments/assets/40c2bb60-1818-4f9b-ac5e-1b3849beb16a" />
+
 ## The Problem
 
 - **iPhone Voice Memos is the only recorder that actually works.** One tap from the lock screen. No app to open, no meeting to join, no "start recording" button to find. It never crashes. It's always there. Nothing else comes close.
