@@ -66,7 +66,7 @@ def _get_s3_client():
     return s3, bucket
 
 
-async def _analyze_with_file_agent(question: str, bot_name: str) -> str | None:
+async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None, s3_bucket: str | None = None) -> str | None:
     """Run Claude Agent SDK pointed at GLM to autonomously analyze stored files.
 
     The agent gets Read, Glob, Grep tools and is pointed at the data/ directory.
@@ -133,6 +133,13 @@ async def _analyze_with_file_agent(question: str, bot_name: str) -> str | None:
             else:
                 os.environ[k] = v
 
+        # Persist Claude Agent session history to S3
+        if s3_client and s3_bucket:
+            try:
+                _sync_claude_history_to_s3(s3_client, s3_bucket)
+            except Exception as e:
+                logger.error(f"Failed to sync Claude history to S3: {e}")
+
 
 # Tool definition for OpenAI function calling (intent detection)
 _CHAT_TOOLS = [
@@ -162,22 +169,73 @@ _CHAT_TOOLS = [
 ]
 
 
-def _sync_from_s3(s3_client, bucket: str, bot_name: str):
-    """On startup, sync all files from S3 to local data/ for this bot."""
-    logger.info(f"Syncing from s3://{bucket}/{bot_name}/ to {DATA_DIR}/{bot_name}/ ...")
+CLAUDE_DIR = Path.home() / ".claude"
+
+
+def _sync_s3_prefix_to_local(s3_client, bucket: str, prefix: str, local_dir: Path):
+    """Download all S3 objects under prefix to local_dir, skipping same-size files."""
+    local_dir.mkdir(parents=True, exist_ok=True)
     paginator = s3_client.get_paginator('list_objects_v2')
     count = 0
-    for page in paginator.paginate(Bucket=bucket, Prefix=f"{bot_name}/"):
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get('Contents', []):
             key = obj['Key']
-            local_path = DATA_DIR / key
-            # Skip if local file exists and is same size
+            # Strip prefix to get relative path
+            rel = key[len(prefix):].lstrip('/')
+            if not rel:
+                continue
+            local_path = local_dir / rel
             if local_path.exists() and local_path.stat().st_size == obj['Size']:
                 continue
             local_path.parent.mkdir(parents=True, exist_ok=True)
             s3_client.download_file(bucket, key, str(local_path))
             count += 1
-    logger.info(f"S3 sync complete: {count} files downloaded")
+    return count
+
+
+def _sync_local_to_s3_prefix(s3_client, bucket: str, prefix: str, local_dir: Path):
+    """Upload all files under local_dir to S3 under prefix, skipping same-size files."""
+    if not local_dir.exists():
+        return 0
+    # Build a set of existing S3 objects for size comparison
+    existing = {}
+    paginator = s3_client.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get('Contents', []):
+            existing[obj['Key']] = obj['Size']
+
+    count = 0
+    for f in local_dir.rglob("*"):
+        if not f.is_file():
+            continue
+        rel = str(f.relative_to(local_dir))
+        key = f"{prefix}{rel}"
+        if key in existing and existing[key] == f.stat().st_size:
+            continue
+        s3_client.upload_file(str(f), bucket, key)
+        count += 1
+    return count
+
+
+def _sync_from_s3(s3_client, bucket: str, bot_name: str):
+    """On startup, sync bot data + Claude Agent session history from S3."""
+    # Sync bot data files
+    logger.info(f"Syncing bot data from s3://{bucket}/{bot_name}/ ...")
+    count = _sync_s3_prefix_to_local(s3_client, bucket, f"{bot_name}/", DATA_DIR / bot_name)
+    logger.info(f"Bot data sync: {count} files downloaded")
+
+    # Sync Claude Agent SDK session history
+    logger.info(f"Syncing Claude Agent history from s3://{bucket}/.claude/ ...")
+    count = _sync_s3_prefix_to_local(s3_client, bucket, ".claude/", CLAUDE_DIR)
+    logger.info(f"Claude Agent history sync: {count} files downloaded")
+
+
+def _sync_claude_history_to_s3(s3_client, bucket: str):
+    """After an agent call, persist Claude session history back to S3."""
+    count = _sync_local_to_s3_prefix(s3_client, bucket, ".claude/", CLAUDE_DIR)
+    if count:
+        logger.info(f"Synced {count} Claude Agent history files to S3")
+
 
 
 def _storage_prefix(bot_name: str, username: str, timestamp: str) -> str:
@@ -238,7 +296,7 @@ def _summarize(transcript_text: str) -> str | None:
         return None
 
 
-async def _chat(user_id: int, message: str, bot_name: str) -> str | None:
+async def _chat(user_id: int, message: str, bot_name: str, s3_client=None, s3_bucket: str | None = None) -> str | None:
     """Chat with AI. Uses OpenAI tool calling to detect file analysis intent.
 
     Normal chat → OpenAI-compatible endpoint responds directly.
@@ -295,7 +353,7 @@ async def _chat(user_id: int, message: str, bot_name: str) -> str | None:
         logger.info(f"Intent: file analysis → delegating to GLM Claude agent (question={question!r})")
 
         # Spawn GLM Claude agent with file tools
-        analysis = await _analyze_with_file_agent(question, bot_name)
+        analysis = await _analyze_with_file_agent(question, bot_name, s3_client=s3_client, s3_bucket=s3_bucket)
 
         if analysis:
             reply = analysis
@@ -469,7 +527,7 @@ def main():
             )
             return
 
-        reply = await _chat(user.id, text, bot_name)
+        reply = await _chat(user.id, text, bot_name, s3_client=s3_client, s3_bucket=s3_bucket)
         if reply:
             await msg.reply_text(reply, parse_mode="Markdown")
         else:
