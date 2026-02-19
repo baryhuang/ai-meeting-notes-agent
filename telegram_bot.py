@@ -4,7 +4,7 @@
 """
 Telegram voice memo transcription bot.
 
-Send a voice memo to the bot, get a transcript back with speaker labels.
+Send a voice memo to the bot, get a summary + full transcript file back.
 
 Usage:
     uv run telegram_bot.py
@@ -12,8 +12,9 @@ Usage:
 
 import os
 import sys
+import io
 import logging
-import tempfile
+import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -26,6 +27,52 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Transcript storage directory
+TRANSCRIPTS_DIR = Path(__file__).parent / "transcripts"
+
+# Short transcripts are sent inline, long ones get summary + file
+INLINE_CHAR_LIMIT = 2000
+
+
+def _get_openai_client():
+    """Get OpenAI-compatible client if API key is configured."""
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        return None
+    from openai import OpenAI
+    base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+
+def _summarize(transcript_text: str) -> str | None:
+    """Summarize a transcript using OpenAI-compatible API. Returns None if unavailable."""
+    client = _get_openai_client()
+    if not client:
+        return None
+
+    model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": (
+                    "You are a meeting notes assistant. Summarize the transcript below. "
+                    "Output format:\n"
+                    "1. A 2-3 sentence summary of what was discussed.\n"
+                    "2. Key decisions made (if any).\n"
+                    "3. Action items with owners (if identifiable).\n\n"
+                    "Be concise. Use bullet points. Do not include timestamps."
+                )},
+                {"role": "user", "content": transcript_text}
+            ],
+            max_tokens=1024,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Summarization failed: {e}")
+        return None
 
 
 def main():
@@ -45,6 +92,16 @@ def main():
     from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
     from src.transcription import transcribe_video, create_text_transcript
+
+    # Ensure storage dirs exist
+    TRANSCRIPTS_DIR.mkdir(exist_ok=True)
+    inbox = Path(__file__).parent / "inbox"
+    inbox.mkdir(exist_ok=True)
+
+    if _get_openai_client():
+        logger.info("AI summarization enabled (OPENAI_API_KEY configured)")
+    else:
+        logger.info("AI summarization disabled (no OPENAI_API_KEY). Will send full transcripts only.")
 
     async def start(update: Update, context):
         await update.message.reply_text(
@@ -85,11 +142,9 @@ def main():
         # Send processing indicator
         processing_msg = await msg.reply_text("Transcribing... this may take a minute.")
 
+        tmp_path = None
         try:
             # Download to temp file
-            inbox = Path(__file__).parent / "inbox"
-            inbox.mkdir(exist_ok=True)
-
             tmp_path = str(inbox / f"tg_{user.id}_{msg.message_id}{ext}")
             await file.download_to_drive(tmp_path)
             logger.info(f"Downloaded audio to {tmp_path}")
@@ -101,18 +156,42 @@ def main():
                 await processing_msg.edit_text("Sorry, I couldn't transcribe that audio. It might be too short or unclear.")
                 return
 
-            # Format and send transcript
+            # Format transcript
             transcript_text = _format_transcript(segments)
 
-            # Telegram message limit is 4096 chars
-            if len(transcript_text) <= 4000:
+            # Save to centralized storage
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+            transcript_filename = f"{timestamp}_{user.first_name}_{msg.message_id}.txt"
+            transcript_path = TRANSCRIPTS_DIR / transcript_filename
+            transcript_path.write_text(transcript_text, encoding='utf-8')
+            logger.info(f"Saved transcript to {transcript_path}")
+
+            # Short transcripts: send inline
+            if len(transcript_text) <= INLINE_CHAR_LIMIT:
                 await processing_msg.edit_text(transcript_text, parse_mode="Markdown")
             else:
-                await processing_msg.delete()
-                chunks = _split_text(transcript_text, 4000)
-                for i, chunk in enumerate(chunks):
-                    header = f"*[Part {i+1}/{len(chunks)}]*\n\n" if len(chunks) > 1 else ""
-                    await msg.reply_text(header + chunk, parse_mode="Markdown")
+                # Long transcripts: summarize + attach file
+                await processing_msg.edit_text("Transcription done. Generating summary...")
+
+                summary = _summarize(transcript_text)
+
+                if summary:
+                    reply_text = f"*Summary:*\n\n{summary}"
+                else:
+                    # No summarization available — send first part as preview
+                    preview = transcript_text[:1500] + "\n\n_(full transcript attached as file)_"
+                    reply_text = preview
+
+                await processing_msg.edit_text(reply_text, parse_mode="Markdown")
+
+                # Send full transcript as file
+                file_bytes = io.BytesIO(transcript_text.encode('utf-8'))
+                file_bytes.name = transcript_filename
+                await msg.reply_document(
+                    document=file_bytes,
+                    filename=transcript_filename,
+                    caption="Full transcript with speaker labels and timestamps."
+                )
 
             logger.info(f"Sent transcript to {user.first_name} ({len(segments)} segments)")
 
@@ -121,8 +200,8 @@ def main():
             await processing_msg.edit_text(f"Sorry, transcription failed. Please try again.\nError: {str(e)[:200]}")
 
         finally:
-            # Clean up audio file (keep transcript cache)
-            if os.path.exists(tmp_path):
+            # Clean up audio file (keep transcript in storage)
+            if tmp_path and os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
     def _mime_to_ext(mime_type: str) -> str:
@@ -150,19 +229,6 @@ def main():
             lines.append(f"[{timestamp}] {seg.text}")
         return "\n".join(lines).strip()
 
-    def _split_text(text: str, max_len: int) -> list:
-        chunks = []
-        current = ""
-        for line in text.split("\n"):
-            if len(current) + len(line) + 1 > max_len:
-                chunks.append(current)
-                current = line
-            else:
-                current = current + "\n" + line if current else line
-        if current:
-            chunks.append(current)
-        return chunks
-
     # Build and run
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
@@ -173,7 +239,6 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))
 
     logger.info("Bot started. Listening for voice memos...")
-    logger.info("Send a voice memo to @baryyyyy_bot on Telegram")
     app.run_polling()
 
 

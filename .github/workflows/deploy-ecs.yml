@@ -89,7 +89,10 @@ jobs:
               "essential": true,
               "environment": [
                 {"name": "ASSEMBLY_API_KEY", "value": "${{ secrets.ASSEMBLY_API_KEY }}"},
-                {"name": "TELEGRAM_BOT_TOKEN", "value": "${{ secrets.TELEGRAM_BOT_TOKEN }}"}
+                {"name": "TELEGRAM_BOT_TOKEN", "value": "${{ secrets.TELEGRAM_BOT_TOKEN }}"},
+                {"name": "OPENAI_API_KEY", "value": "${{ secrets.OPENAI_API_KEY }}"},
+                {"name": "OPENAI_BASE_URL", "value": "${{ secrets.OPENAI_BASE_URL }}"},
+                {"name": "OPENAI_MODEL", "value": "${{ secrets.OPENAI_MODEL }}"}
               ],
               "logConfiguration": {
                 "logDriver": "awslogs",

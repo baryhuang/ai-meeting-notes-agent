@@ -9,4 +9,5 @@ dependencies = [
     "tqdm==4.66.1",
     "zhconv==1.4.3",
     "python-telegram-bot>=21.0",
+    "openai>=1.0.0",
 ]
