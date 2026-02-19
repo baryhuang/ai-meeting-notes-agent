@@ -10,33 +10,53 @@ Want to own it? Self-host this repo with your own API keys. Free forever. MIT li
 
 ## The Problem
 
-- **Recording apps are unreliable.** Granola, Otter, Fireflies — they crash, need the app open, can't start from the lock screen. Apple Voice Memos just works. One tap.
-- **But voice memos go nowhere.** You have hundreds on your phone. You'll never listen to them again.
-- **Transcription costs money.** $20/month for Otter, $30/month for Fireflies, $19/month for Granola. Just to read what you already said.
-- **Self-hosted alternatives need a local machine.** OpenClaw, ClawdBot — you have to keep a computer running 24/7.
+- **iPhone Voice Memos is the only recorder that actually works.** One tap from the lock screen. No app to open, no meeting to join, no "start recording" button to find. It never crashes. It's always there. Nothing else comes close.
+- **But voice memos go nowhere.** You have hundreds on your phone. You'll never listen to them again. The best recorder in the world feeds into a dead end.
+- **Recording apps try to replace Voice Memos — and fail.** Granola, Otter, Fireflies — they need the app open, require accounts, demand microphone permissions mid-meeting. They're solving the wrong problem. The recording part is already solved.
+- **What's missing is the bridge.** From a voice memo on your phone to a searchable, readable transcript you can actually use. That's it.
 
-## The Solution
+## What It Does
 
-Record with Voice Memos. Send it on Telegram. Get the transcript back.
+Send anything to the Telegram bot. It figures out what to do.
+
+| You send | Bot does |
+|----------|----------|
+| Voice memo or audio/video file | Transcribes with speaker labels + timestamps. Long recordings get an AI summary. |
+| Text message | AI chat — ask questions, get help, have a conversation. |
+| Text about your files — *"what did we discuss yesterday?"* | Searches your stored transcripts and files, answers with context. |
+| Any other file (PDF, image, doc...) | Stores it for you. Ask about it later. |
+
+All files — audio, transcripts, uploads — are stored locally and optionally synced to S3. Survives container restarts.
+
+## How It Works
 
 1. **Record** with Apple Voice Memos (or any voice recorder on your phone)
 2. **Share** the recording directly to Telegram — no opening another app, no exporting, no emailing yourself
-3. **Read** the full transcript — with speaker labels and timestamps — right in the chat. Copy, forward, search it. It's already where your conversations live.
-
-No account to create. No 100-step setup. No hunting for a transcript buried in some other app. Just Telegram and a 2-minute bot setup.
+3. **Read** the full transcript — with speaker labels and timestamps — right in the chat
 
 Works with any language. Handles multiple speakers. Transcripts come back in under a minute.
 
 ## Prerequisites
 
-You need two API keys. Both are free to get:
+You need two API keys to get started. Both are free:
 
 | Key | What it's for | Where to get it | Cost |
 |-----|--------------|-----------------|------|
-| `TELEGRAM_BOT_TOKEN` | Receive and reply to voice memos | Message [@BotFather](https://t.me/BotFather) on Telegram, send `/newbot` | Free |
+| `TELEGRAM_BOT_TOKEN` | Receive and reply to messages | Message [@BotFather](https://t.me/BotFather) on Telegram, send `/newbot` | Free |
 | `ASSEMBLY_API_KEY` | Transcription with speaker labels | [assemblyai.com/app/account](https://www.assemblyai.com/app/account) | Free tier included |
 
-That's it. No other accounts, services, or API keys required.
+### Optional keys (unlock more features)
+
+| Key | What it unlocks |
+|-----|----------------|
+| `OPENAI_API_KEY` | AI chat + summarization. Works with any OpenAI-compatible API (OpenAI, OpenRouter, DigitalOcean, etc.) |
+| `OPENAI_BASE_URL` | Custom endpoint (default: `https://api.openai.com/v1`) |
+| `OPENAI_MODEL` | Model for chat + summarization (default: `gpt-4o-mini`) |
+| `GLM_API_KEY` | File analysis via [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-python). Ask questions about your stored files. |
+| `GLM_MODEL` | Model for file analysis (default: `glm-4-plus`) |
+| `ANTHROPIC_BASE_URL` | Anthropic-compatible endpoint (default: `https://api.z.ai/api/anthropic`). Works with Z.AI, Anthropic, or any compatible provider. |
+| `S3_BUCKET` | S3 storage sync — all files mirrored to S3, restored on container restart |
+| `BOT_NAME` | Storage prefix (default: `transcribe-bot`) |
 
 ## Getting Started
 
@@ -55,7 +75,7 @@ git clone <repo-url> && cd ai-meeting-notes-agent
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your two API keys:
+Edit `.env` and fill in your API keys:
 ```
 ASSEMBLY_API_KEY=your_assemblyai_key
 TELEGRAM_BOT_TOKEN=your_bot_token
@@ -76,15 +96,13 @@ That's it. Send a voice memo to your bot on Telegram and get a transcript back.
 docker compose up -d
 ```
 
-### Railway (one click)
-
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repo=your-repo-url)
-
-Set `ASSEMBLY_API_KEY` and `TELEGRAM_BOT_TOKEN` as environment variables in the Railway dashboard.
+The bot uses polling (no inbound ports needed), so it runs anywhere Docker runs — a $5 VPS, a Raspberry Pi, or your laptop.
 
 ### AWS ECS (via GitHub Actions)
 
-Fork this repo, add 4 secrets in GitHub repo settings, and push. It deploys automatically.
+Fork this repo, add secrets in GitHub repo settings, and push. It deploys automatically.
+
+**Required secrets:**
 
 | GitHub Secret | Value |
 |---------------|-------|
@@ -93,11 +111,26 @@ Fork this repo, add 4 secrets in GitHub repo settings, and push. It deploys auto
 | `ASSEMBLY_API_KEY` | Your AssemblyAI key |
 | `TELEGRAM_BOT_TOKEN` | Your bot token from BotFather |
 
-Every push to `main` builds and deploys to ECS Fargate (~$3-5/month). You can also trigger it manually from the Actions tab.
+**Optional secrets (for AI + storage features):**
 
-### Any server with Docker
+| GitHub Secret | Value |
+|---------------|-------|
+| `OPENAI_API_KEY` | OpenAI-compatible API key for chat + summarization |
+| `OPENAI_BASE_URL` | Custom endpoint URL |
+| `OPENAI_MODEL` | Model name |
+| `GLM_API_KEY` | API key for file analysis |
+| `GLM_MODEL` | Model name for file analysis |
+| `ANTHROPIC_BASE_URL` | Anthropic-compatible endpoint URL |
+| `S3_BUCKET` | S3 bucket name for file sync |
+| `BOT_NAME` | Storage prefix |
 
-The bot uses polling (no inbound ports needed), so it runs anywhere Docker runs — a $5 VPS, a Raspberry Pi, or your laptop. Just `docker compose up -d`.
+Every push to `main` builds and deploys to ECS Fargate. You can also trigger it manually from the Actions tab.
+
+### Railway (one click)
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repo=your-repo-url)
+
+Set your API keys as environment variables in the Railway dashboard.
 
 ### Already have a backlog?
 
@@ -111,12 +144,21 @@ uv run transcribe.py -f /path/to/recordings/
 
 Voice notes from Telegram, iPhone Voice Memos, and any standard audio/video format: `.m4a`, `.mp3`, `.ogg`, `.wav`, `.mp4`, `.mov`, and more.
 
+## Architecture
+
+- **Telegram bot** (`telegram_bot.py`) — handles all message types, routes to transcription/chat/storage
+- **Transcription** (`src/transcription/`) — AssemblyAI with speaker diarization and auto language detection
+- **AI chat** — OpenAI-compatible endpoint for conversation and summarization
+- **File analysis** — Claude Agent SDK spawns an autonomous agent that reads your stored files and answers questions
+- **Storage** — unified `data/{bot_name}/YYYY/MM/DD/` structure, identical paths locally and on S3
+- **S3 sync** — bidirectional: pulls from S3 on startup, pushes after every write
+
 ## What's Next
 
-- **Summarization** — turn a 20-minute ramble into a 1-paragraph summary
-- **Action items** — pull out who needs to do what, automatically
 - **Personalized notes** — each participant gets notes relevant to them
+- **Calendar integration** — auto-match recordings to meetings
+- **Team workspaces** — shared transcripts across a group
 
 ## Technical Details
 
-See [TECHNICAL.md](TECHNICAL.md) for architecture, configuration, Google Drive watcher, and deployment instructions.
+See [TECHNICAL.md](TECHNICAL.md) for detailed architecture, configuration, Google Drive watcher, and deployment instructions.

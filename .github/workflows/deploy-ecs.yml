@@ -130,6 +130,7 @@ jobs:
                 {"name": "OPENAI_MODEL", "value": "${{ secrets.OPENAI_MODEL }}"},
                 {"name": "GLM_API_KEY", "value": "${{ secrets.GLM_API_KEY }}"},
                 {"name": "GLM_MODEL", "value": "${{ secrets.GLM_MODEL }}"},
+                {"name": "ANTHROPIC_BASE_URL", "value": "${{ secrets.ANTHROPIC_BASE_URL }}"},
                 {"name": "S3_BUCKET", "value": "${{ secrets.S3_BUCKET }}"},
                 {"name": "BOT_NAME", "value": "${{ secrets.BOT_NAME }}"}
               ],

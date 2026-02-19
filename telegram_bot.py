@@ -109,7 +109,7 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
     # Set both ANTHROPIC_AUTH_TOKEN (Bearer) and ANTHROPIC_API_KEY (x-api-key)
     # to maximise compatibility across CLI versions.
     agent_env = {
-        "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+        "ANTHROPIC_BASE_URL": os.getenv('ANTHROPIC_BASE_URL', "https://api.z.ai/api/anthropic"),
         "ANTHROPIC_AUTH_TOKEN": glm_key,
         "ANTHROPIC_API_KEY": glm_key,
         "API_TIMEOUT_MS": "120000",
