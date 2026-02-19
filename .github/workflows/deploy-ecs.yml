@@ -3,6 +3,14 @@ name: Deploy to AWS ECS
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - '**/*.rst'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'CLAUDE.md'
   workflow_dispatch:
 
 env:
