@@ -1,0 +1,12 @@
+[project]
+name = "ai-meeting-notes-agent"
+version = "0.3.0"
+requires-python = ">=3.10"
+dependencies = [
+    "assemblyai==0.17.0",
+    "moviepy==1.0.3",
+    "python-dotenv==1.0.0",
+    "tqdm==4.66.1",
+    "zhconv==1.4.3",
+    "python-telegram-bot>=21.0",
+]

@@ -1,107 +1,122 @@
 # ai-meeting-notes-agent
 
-> One click flow that turns recordings into personalized meeting notes and action items.
+> The open source, free alternative to Granola. Your iPhone already has the best meeting recorder — you just don't have a way to use it.
 
-Currently implements the first stage of the pipeline: automated voice memo transcription. Team members record voice memos on iPhones, share them to a Google Drive folder, and this system automatically transcribes them using AssemblyAI (with speaker diarization) and pushes results back to Drive.
+## Free to use. No catch.
 
-**Roadmap**: transcription (done) -> summarization -> action item extraction -> personalized notes per participant.
+**Try it now at [notesly.app](https://notesly.app)** — completely free through May 2026. No limits on minutes, no paywalls, no credit card. Just send a voice memo and get a transcript.
 
-## How It Works
+Want to own it? Self-host this repo with your own API keys. Free forever. MIT licensed.
 
-```
-iPhone Voice Memo -> Share to Google Drive shared folder
-                              |
-        Linux cron: rclone copy (pull new files every 60s)
-                              |
-                    /srv/transcribe/inbox/
-                              |
-            drive_watcher.py (polling local dir)
-                              |
-            transcribe -> .transcript.json + .transcript.txt
-                              |
-        Linux cron: rclone copy (push results back to Drive)
-```
+## The Problem
 
-## Quick Start
+- **Recording apps are unreliable.** Granola, Otter, Fireflies — they crash, need the app open, can't start from the lock screen. Apple Voice Memos just works. One tap.
+- **But voice memos go nowhere.** You have hundreds on your phone. You'll never listen to them again.
+- **Transcription costs money.** $20/month for Otter, $30/month for Fireflies, $19/month for Granola. Just to read what you already said.
+- **Self-hosted alternatives need a local machine.** OpenClaw, ClawdBot — you have to keep a computer running 24/7.
+
+## The Solution
+
+Record with Voice Memos. Send it on Telegram. Get the transcript back.
+
+1. **Record** with Apple Voice Memos (or any voice recorder on your phone)
+2. **Share** the recording directly to Telegram — no opening another app, no exporting, no emailing yourself
+3. **Read** the full transcript — with speaker labels and timestamps — right in the chat. Copy, forward, search it. It's already where your conversations live.
+
+No account to create. No 100-step setup. No hunting for a transcript buried in some other app. Just Telegram and a 2-minute bot setup.
+
+Works with any language. Handles multiple speakers. Transcripts come back in under a minute.
+
+## Prerequisites
+
+You need two API keys. Both are free to get:
+
+| Key | What it's for | Where to get it | Cost |
+|-----|--------------|-----------------|------|
+| `TELEGRAM_BOT_TOKEN` | Receive and reply to voice memos | Message [@BotFather](https://t.me/BotFather) on Telegram, send `/newbot` | Free |
+| `ASSEMBLY_API_KEY` | Transcription with speaker labels | [assemblyai.com/app/account](https://www.assemblyai.com/app/account) | Free tier included |
+
+That's it. No other accounts, services, or API keys required.
+
+## Getting Started
+
+### 1. Create a Telegram Bot (2 minutes)
+
+1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
+2. Send `/newbot`
+3. Pick a name for your bot (e.g., "My Transcriber")
+4. Pick a username (e.g., `my_transcriber_bot`)
+5. BotFather gives you an API token — copy it
+
+### 2. Run the Bot
 
 ```bash
-git clone <repo-url>
-cd ai-meeting-notes-agent
-chmod +x setup_server.sh && ./setup_server.sh
+git clone <repo-url> && cd ai-meeting-notes-agent
+cp .env.example .env
 ```
 
-The setup script walks through everything interactively: installs deps, opens browser for Google auth, configures `.env`, and installs systemd services.
+Edit `.env` and fill in your two API keys:
+```
+ASSEMBLY_API_KEY=your_assemblyai_key
+TELEGRAM_BOT_TOKEN=your_bot_token
+```
 
-## Manual Usage
+Start the bot:
+```bash
+uv run telegram_bot.py
+```
+
+That's it. Send a voice memo to your bot on Telegram and get a transcript back.
+
+## Deploy
+
+### Docker (any server)
 
 ```bash
-source .venv/bin/activate
-
-# Transcribe a single file
-python transcribe.py -i recording.m4a
-
-# Transcribe all files in a folder
-python transcribe.py -f /path/to/recordings/
-
-# Force re-transcription of existing files
-python transcribe.py -i recording.m4a --force-overwrite
-
-# Run the drive watcher daemon
-python drive_watcher.py
-
-# Dry run (list unprocessed files without transcribing)
-python drive_watcher.py --dry-run
+docker compose up -d
 ```
 
-## Language Detection
+### Railway (one click)
 
-Language is detected automatically via a cascading strategy:
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repo=your-repo-url)
 
-1. **Explicit flag**: `--language-code en`
-2. **Filename suffix**: `meeting_en.m4a` -> detected as English
-3. **Auto-detect**: Falls back to AssemblyAI's automatic language detection (99 languages)
+Set `ASSEMBLY_API_KEY` and `TELEGRAM_BOT_TOKEN` as environment variables in the Railway dashboard.
+
+### AWS ECS (via GitHub Actions)
+
+Fork this repo, add 4 secrets in GitHub repo settings, and push. It deploys automatically.
+
+| GitHub Secret | Value |
+|---------------|-------|
+| `AWS_ACCESS_KEY_ID` | Your AWS access key |
+| `AWS_SECRET_ACCESS_KEY` | Your AWS secret key |
+| `ASSEMBLY_API_KEY` | Your AssemblyAI key |
+| `TELEGRAM_BOT_TOKEN` | Your bot token from BotFather |
+
+Every push to `main` builds and deploys to ECS Fargate (~$3-5/month). You can also trigger it manually from the Actions tab.
+
+### Any server with Docker
+
+The bot uses polling (no inbound ports needed), so it runs anywhere Docker runs — a $5 VPS, a Raspberry Pi, or your laptop. Just `docker compose up -d`.
+
+### Already have a backlog?
+
+Got a folder full of voice memos you never transcribed? Do them all at once:
+
+```bash
+uv run transcribe.py -f /path/to/recordings/
+```
 
 ## Supported Formats
 
-Audio: `.mp3`, `.wav`, `.m4a`, `.aac`, `.ogg`
-Video: `.mp4`, `.avi`, `.mov`, `.mkv`, `.webm`
+Voice notes from Telegram, iPhone Voice Memos, and any standard audio/video format: `.m4a`, `.mp3`, `.ogg`, `.wav`, `.mp4`, `.mov`, and more.
 
-## Configuration
+## What's Next
 
-Copy `.env.example` to `.env` and fill in:
+- **Summarization** — turn a 20-minute ramble into a 1-paragraph summary
+- **Action items** — pull out who needs to do what, automatically
+- **Personalized notes** — each participant gets notes relevant to them
 
-```
-ASSEMBLY_API_KEY=your_key_here    # Required - AssemblyAI transcription
-RCLONE_REMOTE=gdrive              # rclone remote name
-GDRIVE_FOLDER=VoiceMemos          # Google Drive folder to watch
-LOCAL_INBOX_DIR=/srv/transcribe/inbox
-```
+## Technical Details
 
-## Service Management
-
-```bash
-# Start services
-sudo systemctl start drive-watcher rclone-sync.timer
-
-# Check status
-systemctl status drive-watcher rclone-sync.timer
-
-# View logs
-journalctl -u drive-watcher -f
-```
-
-## Project Structure
-
-```
-transcribe.py           # CLI entry point for manual transcription
-drive_watcher.py        # Daemon that watches inbox for new files
-src/
-  transcription/
-    transcriber.py      # AssemblyAI integration, speaker diarization
-  models/
-    transcription.py    # TranscriptionSegment data class
-scripts/
-  rclone-sync.sh        # Pull from / push to Google Drive
-systemd/                # Linux service files
-setup_server.sh         # One-command server setup
-```
+See [TECHNICAL.md](TECHNICAL.md) for architecture, configuration, Google Drive watcher, and deployment instructions.
