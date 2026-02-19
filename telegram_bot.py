@@ -78,7 +78,12 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
     if not glm_key:
         return None
 
-    from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
+    from claude_agent_sdk import (
+        query, ClaudeAgentOptions,
+        AssistantMessage, SystemMessage, ResultMessage, UserMessage,
+        TextBlock, ToolUseBlock, ToolResultBlock,
+        ProcessError,
+    )
 
     bot_data_dir = DATA_DIR / bot_name
     bot_data_dir.mkdir(parents=True, exist_ok=True)
@@ -114,15 +119,36 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
     try:
         result_parts = []
         async for message in query(prompt=question, options=options):
+            # Log all message types for debugging
             if isinstance(message, AssistantMessage):
                 for block in message.content:
                     if isinstance(block, TextBlock):
+                        logger.info(f"Agent text: {block.text[:200]}")
                         result_parts.append(block.text)
+                    elif isinstance(block, ToolUseBlock):
+                        logger.info(f"Agent tool call: {block.name}({getattr(block, 'input', '')})")
+                    elif isinstance(block, ToolResultBlock):
+                        content = str(getattr(block, 'content', ''))[:200]
+                        logger.info(f"Agent tool result: {content}")
+            elif isinstance(message, SystemMessage):
+                logger.info(f"Agent system: {message}")
+            elif isinstance(message, ResultMessage):
+                logger.info(f"Agent result: {message}")
+            else:
+                logger.info(f"Agent message ({type(message).__name__}): {str(message)[:200]}")
 
         return "\n".join(result_parts) if result_parts else None
 
+    except ProcessError as e:
+        logger.error(f"Claude Agent SDK process failed (exit code {e.exit_code}): {e}")
+        # Try to get more details
+        if hasattr(e, 'stderr'):
+            logger.error(f"Agent stderr: {e.stderr}")
+        if hasattr(e, 'stdout'):
+            logger.error(f"Agent stdout: {e.stdout}")
+        return None
     except Exception as e:
-        logger.error(f"Claude Agent SDK (GLM) failed: {e}")
+        logger.error(f"Claude Agent SDK (GLM) failed: {type(e).__name__}: {e}")
         return None
 
     finally:

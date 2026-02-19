@@ -114,8 +114,8 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --requires-compatibilities FARGATE \
             --network-mode awsvpc \
-            --cpu 1024 \
-            --memory 2048 \
+            --cpu 2048 \
+            --memory 4096 \
             --execution-role-arn "arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskExecutionRole" \
             --task-role-arn "arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskRole" \
             --container-definitions '[{
