@@ -1,21 +1,129 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Input } from '@/components/ui/input';
+import {
+  ReactFlow,
+  Background,
+  ReactFlowProvider,
+  type NodeTypes,
+  type Edge,
+  MarkerType,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogBody,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   useBotConfig,
   useSaveConfig,
   useRestartBot,
   type ConfigItem,
 } from '@/hooks/use-bot-config';
+import { useBotStatus } from '@/hooks/use-bot-status';
+import { INITIAL_NODES, INITIAL_EDGES } from './pipeline-config';
+import { PipelineNode, PipelineContext } from './pipeline-node';
+
+const nodeTypes: NodeTypes = {
+  pipeline: PipelineNode,
+};
+
+const edges: Edge[] = INITIAL_EDGES.map((e) => ({
+  ...e,
+  type: 'smoothstep',
+  markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+}));
+
+/** Map node IDs to display names and config groups */
+const NODE_META: Record<string, { name: string; configGroup: string }> = {
+  telegram: { name: 'Telegram', configGroup: 'Telegram' },
+  transcription: { name: 'Transcription', configGroup: 'Transcription' },
+  storage: { name: 'Storage', configGroup: 'Storage' },
+  chat: { name: 'Conversation', configGroup: 'Conversation' },
+  file_analysis: { name: 'Claude Code Agent', configGroup: 'Claude Code Agent' },
+};
+
+function ConfigDialog({
+  nodeId,
+  open,
+  onOpenChange,
+  configItems,
+  onChange,
+}: {
+  nodeId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  configItems: ConfigItem[];
+  onChange: (key: string, value: string) => void;
+}) {
+  const meta = NODE_META[nodeId];
+  if (!meta) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{meta.name} Settings</DialogTitle>
+          <DialogDescription>
+            Configure environment variables for the {meta.name} module.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          {configItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">
+              No configurable fields for this module.
+            </p>
+          ) : (
+            <div className="grid gap-4">
+              {configItems.map((item) => (
+                <div key={item.key} className="grid gap-1.5">
+                  <label htmlFor={`dlg-${item.key}`} className="text-sm font-medium text-foreground">
+                    {item.label}
+                    {item.required && <span className="text-destructive ml-0.5">*</span>}
+                    <span className="ml-2 text-xs text-muted-foreground font-mono">
+                      {item.key}
+                    </span>
+                  </label>
+                  <Input
+                    id={`dlg-${item.key}`}
+                    type={item.secret ? 'password' : 'text'}
+                    placeholder={
+                      item.secret
+                        ? item.is_set ? item.value : item.default || 'Not set'
+                        : item.default || 'Not set'
+                    }
+                    defaultValue={item.secret ? '' : item.value}
+                    onChange={(e) => onChange(item.key, e.target.value)}
+                  />
+                  {item.default && (
+                    <span className="text-xs text-muted-foreground">
+                      Default: {item.default}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 export function SettingsPage() {
   const { data, isLoading, error } = useBotConfig();
+  const { data: status } = useBotStatus();
   const saveConfig = useSaveConfig();
   const restartBot = useRestartBot();
   const [edits, setEdits] = useState<Record<string, string>>({});
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
-  // Group config items by their group field
   const groups = useMemo(() => {
     if (!data?.config) return {};
     const map: Record<string, ConfigItem[]> = {};
@@ -58,6 +166,19 @@ export function SettingsPage() {
     }
   }
 
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: { id: string }) => {
+    setSelectedNode(node.id);
+  }, []);
+
+  const ctxValue = useMemo(
+    () => ({ status, onNodeClick: (id: string) => setSelectedNode(id) }),
+    [status],
+  );
+
+  const selectedConfigItems = selectedNode
+    ? groups[NODE_META[selectedNode]?.configGroup] ?? []
+    : [];
+
   if (isLoading) {
     return (
       <div className="container">
@@ -82,55 +203,49 @@ export function SettingsPage() {
         <div>
           <h1 className="text-xl font-semibold">Settings</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage environment variables for the bot. Secret values are masked.
+            Configure the bot pipeline. Click a node to edit its settings.
           </p>
         </div>
 
-        {Object.entries(groups).map(([group, items]) => (
-          <div
-            key={group}
-            className="rounded-lg border border-border bg-card p-5"
-          >
-            <h2 className="text-base font-semibold mb-4">{group}</h2>
-            <div className="grid gap-4">
-              {items.map((item) => (
-                <div key={item.key} className="grid gap-1.5">
-                  <label
-                    htmlFor={item.key}
-                    className="text-sm font-medium text-foreground"
-                  >
-                    {item.label}
-                    {item.required && (
-                      <span className="text-destructive ml-0.5">*</span>
-                    )}
-                    <span className="ml-2 text-xs text-muted-foreground font-mono">
-                      {item.key}
-                    </span>
-                  </label>
-                  <Input
-                    id={item.key}
-                    type={item.secret ? 'password' : 'text'}
-                    placeholder={
-                      item.secret
-                        ? item.is_set
-                          ? item.value
-                          : item.default || 'Not set'
-                        : item.default || 'Not set'
-                    }
-                    defaultValue={item.secret ? '' : item.value}
-                    onChange={(e) => handleChange(item.key, e.target.value)}
-                  />
-                  {item.default && (
-                    <span className="text-xs text-muted-foreground">
-                      Default: {item.default}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+        {/* ── Pipeline diagram ── */}
+        <div className="h-[420px] rounded-xl border border-border bg-card">
+          <ReactFlowProvider>
+            <PipelineContext.Provider value={ctxValue}>
+              <ReactFlow
+                nodes={INITIAL_NODES}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                onNodeClick={handleNodeClick}
+                fitView
+                fitViewOptions={{ padding: 0.2 }}
+                nodesDraggable={false}
+                nodesConnectable={false}
+                elementsSelectable={false}
+                panOnDrag={false}
+                zoomOnScroll={false}
+                zoomOnPinch={false}
+                zoomOnDoubleClick={false}
+                preventScrolling={false}
+                proOptions={{ hideAttribution: true }}
+              >
+                <Background gap={20} size={1} />
+              </ReactFlow>
+            </PipelineContext.Provider>
+          </ReactFlowProvider>
+        </div>
 
+        {/* ── Config dialog ── */}
+        {selectedNode !== null && (
+          <ConfigDialog
+            nodeId={selectedNode}
+            open
+            onOpenChange={(open) => { if (!open) setSelectedNode(null); }}
+            configItems={selectedConfigItems}
+            onChange={handleChange}
+          />
+        )}
+
+        {/* ── Save buttons ── */}
         <div className="flex gap-3 pb-5">
           <Button
             onClick={() => handleSave(false)}

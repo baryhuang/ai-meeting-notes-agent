@@ -144,13 +144,13 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Chat — only if enabled */}
+        {/* Conversation — only if enabled */}
         {modules.chat.enabled && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <MessageSquare className="size-4" />
-                Chat / Summary
+                Conversation
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -164,13 +164,13 @@ export function DashboardPage() {
           </Card>
         )}
 
-        {/* File Analysis — only if enabled */}
+        {/* Claude Code Agent — only if enabled */}
         {modules.file_analysis.enabled && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <FileText className="size-4" />
-                File Analysis
+                Claude Code Agent
               </CardTitle>
             </CardHeader>
             <CardContent>
