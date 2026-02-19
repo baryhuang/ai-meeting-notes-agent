@@ -105,14 +105,22 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
     bot_data_dir.mkdir(parents=True, exist_ok=True)
     data_path = str(bot_data_dir.resolve())
 
-    # Build env dict for the CLI subprocess
+    # Build env dict for the CLI subprocess.
+    # Set both ANTHROPIC_AUTH_TOKEN (Bearer) and ANTHROPIC_API_KEY (x-api-key)
+    # to maximise compatibility across CLI versions.
     agent_env = {
         "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
         "ANTHROPIC_AUTH_TOKEN": glm_key,
+        "ANTHROPIC_API_KEY": glm_key,
+        "API_TIMEOUT_MS": "120000",
     }
     glm_model = os.getenv('GLM_MODEL')
     if glm_model:
         agent_env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = glm_model
+
+    # Also inject into current process env so the subprocess inherits them
+    for k, v in agent_env.items():
+        os.environ[k] = v
 
     options = ClaudeAgentOptions(
         system_prompt=(
