@@ -66,13 +66,27 @@ def _get_s3_client():
     return s3, bucket
 
 
+def _ensure_claude_config():
+    """Create minimal Claude config files if they don't exist.
+
+    The Claude Code CLI expects ~/.claude.json and ~/.claude/ to exist.
+    Without them it logs warnings and may fail.
+    """
+    config_file = Path.home() / ".claude.json"
+    if not config_file.exists():
+        config_file.write_text("{}")
+        logger.info(f"Created minimal {config_file}")
+
+    claude_dir = Path.home() / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+
+
 async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None, s3_bucket: str | None = None) -> str | None:
     """Run Claude Agent SDK pointed at GLM to autonomously analyze stored files.
 
     The agent gets Read, Glob, Grep tools and is pointed at the data/ directory.
-    GLM's Anthropic-compatible endpoint is used as the backend via env vars:
-      ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic
-      ANTHROPIC_AUTH_TOKEN=<GLM_API_KEY>
+    GLM's Anthropic-compatible endpoint is configured via the env parameter
+    on ClaudeAgentOptions (passed directly to the CLI subprocess).
     """
     glm_key = os.getenv('GLM_API_KEY')
     if not glm_key:
@@ -85,9 +99,20 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
         ProcessError,
     )
 
+    _ensure_claude_config()
+
     bot_data_dir = DATA_DIR / bot_name
     bot_data_dir.mkdir(parents=True, exist_ok=True)
     data_path = str(bot_data_dir.resolve())
+
+    # Build env dict for the CLI subprocess
+    agent_env = {
+        "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+        "ANTHROPIC_AUTH_TOKEN": glm_key,
+    }
+    glm_model = os.getenv('GLM_MODEL')
+    if glm_model:
+        agent_env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = glm_model
 
     options = ClaudeAgentOptions(
         system_prompt=(
@@ -99,27 +124,12 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
         allowed_tools=["Read", "Glob", "Grep"],
         cwd=data_path,
         max_turns=10,
+        env=agent_env,
     )
-
-    # Point the agent at GLM's Anthropic-compatible endpoint
-    env_override = {
-        "ANTHROPIC_BASE_URL": "https://open.bigmodel.cn/api/anthropic",
-        "ANTHROPIC_AUTH_TOKEN": glm_key,
-    }
-    glm_model = os.getenv('GLM_MODEL')
-    if glm_model:
-        env_override["ANTHROPIC_DEFAULT_SONNET_MODEL"] = glm_model
-
-    # Temporarily set env vars for the agent subprocess
-    old_env = {}
-    for k, v in env_override.items():
-        old_env[k] = os.environ.get(k)
-        os.environ[k] = v
 
     try:
         result_parts = []
         async for message in query(prompt=question, options=options):
-            # Log all message types for debugging
             if isinstance(message, AssistantMessage):
                 for block in message.content:
                     if isinstance(block, TextBlock):
@@ -141,7 +151,6 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
 
     except ProcessError as e:
         logger.error(f"Claude Agent SDK process failed (exit code {e.exit_code}): {e}")
-        # Try to get more details
         if hasattr(e, 'stderr'):
             logger.error(f"Agent stderr: {e.stderr}")
         if hasattr(e, 'stdout'):
@@ -152,13 +161,6 @@ async def _analyze_with_file_agent(question: str, bot_name: str, s3_client=None,
         return None
 
     finally:
-        # Restore original env
-        for k, v in old_env.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
-
         # Persist Claude Agent session history to S3
         if s3_client and s3_bucket:
             try:
