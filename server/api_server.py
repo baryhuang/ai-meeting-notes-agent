@@ -5,6 +5,7 @@ import os
 import platform
 import socket
 import sys
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -71,7 +72,8 @@ def _detect_deployment() -> dict:
     return {
         "type": env_type,
         "hostname": platform.node(),
-        "ip": _get_local_ip(),
+        "private_ip": _get_local_ip(),
+        "public_ip": _get_public_ip(),
         "region": region,
         "detail": detail,
         "python": platform.python_version(),
@@ -88,6 +90,14 @@ def _get_local_ip() -> str:
         return ip
     except Exception:
         return "127.0.0.1"
+
+
+def _get_public_ip() -> str:
+    try:
+        resp = urllib.request.urlopen("https://checkip.amazonaws.com", timeout=3)
+        return resp.read().decode().strip()
+    except Exception:
+        return ""
 
 
 @app.get("/api/health")

@@ -38,7 +38,7 @@ import {
 import { useBotStatus } from '@/hooks/use-bot-status';
 import { INITIAL_NODES, INITIAL_EDGES } from './pipeline-config';
 import { PipelineNode, PipelineContext } from './pipeline-node';
-import { Activity, Clock, AlertTriangle, Server, Globe } from 'lucide-react';
+import { Activity, Clock, AlertTriangle, Server, Globe, ExternalLink } from 'lucide-react';
 
 const nodeTypes: NodeTypes = {
   pipeline: PipelineNode,
@@ -289,10 +289,21 @@ export function SettingsPage() {
                   {deploymentLabel(status.deployment.type)}
                 </Badge>
               </div>
+              {status.deployment.public_ip && (
+                <a
+                  href={`http://${status.deployment.public_ip}:8080`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-primary hover:underline font-mono text-xs"
+                >
+                  <ExternalLink className="size-3.5" />
+                  {status.deployment.public_ip}:8080
+                </a>
+              )}
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Globe className="size-3.5" />
                 {status.deployment.hostname}
-                <span className="font-mono text-xs">({status.deployment.ip})</span>
+                <span className="font-mono text-xs">({status.deployment.private_ip})</span>
               </div>
               {status.deployment.region && (
                 <span className="text-muted-foreground">{status.deployment.region}</span>

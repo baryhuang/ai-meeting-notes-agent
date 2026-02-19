@@ -30,7 +30,8 @@ export interface BotStatus {
   deployment: {
     type: 'local' | 'aws-ecs' | 'aws-ec2' | 'docker' | 'systemd';
     hostname: string;
-    ip: string;
+    private_ip: string;
+    public_ip: string;
     region: string;
     detail: string;
     python: string;
