@@ -122,6 +122,16 @@ jobs:
               "name": "${{ env.APP_NAME }}",
               "image": "'"$ECR_REGISTRY/${{ env.APP_NAME }}:latest"'",
               "essential": true,
+              "portMappings": [
+                {"containerPort": 8080, "hostPort": 8080, "protocol": "tcp"}
+              ],
+              "healthCheck": {
+                "command": ["CMD-SHELL", "curl -f http://localhost:8080/api/health || exit 1"],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3,
+                "startPeriod": 60
+              },
               "environment": [
                 {"name": "ASSEMBLY_API_KEY", "value": "${{ secrets.ASSEMBLY_API_KEY }}"},
                 {"name": "TELEGRAM_BOT_TOKEN", "value": "${{ secrets.TELEGRAM_BOT_TOKEN }}"},

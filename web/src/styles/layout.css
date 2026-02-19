@@ -1,0 +1,42 @@
+/* Layout Variables */
+:root {
+  --sidebar-width: 16rem; /* 256px */
+  --sidebar-collapsed-width: 4rem; /* 64px */
+  --header-height: 4rem; /* 64px */
+  --content-padding: 1.25rem; /* 20px */
+}
+
+/* Responsive sidebar */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 100vw;
+    --sidebar-collapsed-width: 0;
+  }
+}
+
+/* Sidebar states */
+.sidebar-expanded {
+  width: var(--sidebar-width);
+}
+
+.sidebar-collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+/* Header full width */
+.header-full-width {
+  width: calc(100vw - var(--sidebar-width));
+}
+
+.header-full-width-collapsed {
+  width: calc(100vw - var(--sidebar-collapsed-width));
+}
+
+/* Content full width */
+.content-full-width {
+  width: calc(100vw - var(--sidebar-width));
+}
+
+.content-full-width-collapsed {
+  width: calc(100vw - var(--sidebar-collapsed-width));
+}

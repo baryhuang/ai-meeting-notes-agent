@@ -27,3 +27,10 @@ processed_files.json
 
 # SQLite
 *.sqlite
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Data
+data/
