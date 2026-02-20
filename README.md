@@ -8,6 +8,9 @@
 
 Want to own it? Self-host this repo with your own API keys. Free forever. MIT licensed.
 
+https://github.com/user-attachments/assets/37a70d2d-ba9c-4335-b466-da24bbf3b4c4
+
+
 <img width="1418" height="715" alt="notesly_deployment_config_sample" src="https://github.com/user-attachments/assets/40c2bb60-1818-4f9b-ac5e-1b3849beb16a" />
 
 ## Core Value
