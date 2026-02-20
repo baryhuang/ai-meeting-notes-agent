@@ -2,11 +2,9 @@
 
 > Voice transcription meets autonomous AI agent. Like [OpenClaw](https://openclaw.ai/) for your voice memos — transcribe, chat, and let an AI agent work with your files, all through Telegram.
 
-## Free to use. No catch.
+## Free and open source.
 
-**Try it now at [notesly.app](https://notesly.app)** — completely free through May 2026. No limits on minutes, no paywalls, no credit card. Just send a voice memo and get a transcript.
-
-Want to own it? Self-host this repo with your own API keys. Free forever. MIT licensed.
+Self-host with your own API keys. Free forever. MIT licensed.
 
 https://github.com/user-attachments/assets/37a70d2d-ba9c-4335-b466-da24bbf3b4c4
 
