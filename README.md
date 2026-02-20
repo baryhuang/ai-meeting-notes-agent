@@ -1,6 +1,6 @@
 # ai-meeting-notes-agent
 
-> The open source, free alternative to Granola. Your iPhone already has the best meeting recorder — you just don't have a way to use it.
+> Voice transcription meets autonomous AI agent. Like [OpenClaw](https://openclaw.ai/) for your voice memos — transcribe, chat, and let an AI agent work with your files, all through Telegram.
 
 ## Free to use. No catch.
 
@@ -10,12 +10,22 @@ Want to own it? Self-host this repo with your own API keys. Free forever. MIT li
 
 <img width="1418" height="715" alt="notesly_deployment_config_sample" src="https://github.com/user-attachments/assets/40c2bb60-1818-4f9b-ac5e-1b3849beb16a" />
 
+## Core Value
+
+**Transcription + AI agent in one bot.** Two things that belong together but nobody combines:
+
+1. **Transcription** — send a voice memo, get a transcript with speaker labels and timestamps. Any language, any length. That's the entry point.
+2. **Autonomous AI agent** — the same bot holds a conversation, summarizes long recordings, and spawns a Claude Code Agent that reads your stored files to answer questions. Like OpenClaw, but specialized for voice-first workflows.
+
+Your Telegram chat becomes a personal AI workspace where voice memos, transcripts, files, and conversations all live together.
+
 ## The Problem
 
-- **iPhone Voice Memos is the only recorder that actually works.** One tap from the lock screen. No app to open, no meeting to join, no "start recording" button to find. It never crashes. It's always there. Nothing else comes close.
-- **But voice memos go nowhere.** You have hundreds on your phone. You'll never listen to them again. The best recorder in the world feeds into a dead end.
-- **Recording apps try to replace Voice Memos — and fail.** Granola, Otter, Fireflies — they need the app open, require accounts, demand microphone permissions mid-meeting. They're solving the wrong problem. The recording part is already solved.
-- **What's missing is the bridge.** From a voice memo on your phone to a searchable, readable transcript you can actually use. That's it.
+- **iPhone Voice Memos is the best recorder.** One tap from the lock screen. No app to open, no meeting to join. It never crashes. Nothing else comes close.
+- **But voice memos are a dead end.** You have hundreds on your phone. You'll never listen to them again.
+- **Recording apps solve the wrong problem.** Granola, Otter, Fireflies — they replace Voice Memos instead of building on it.
+- **AI assistants don't know your context.** ChatGPT, OpenClaw — powerful, but they can't search last Tuesday's meeting or find what your manager said about the deadline.
+- **What's missing is the bridge.** Transcription that feeds into an AI agent with memory of everything you've recorded and stored.
 
 ## What It Does
 
@@ -148,12 +158,15 @@ Voice notes from Telegram, iPhone Voice Memos, and any standard audio/video form
 
 ## Architecture
 
-- **Telegram bot** (`telegram_bot.py`) — handles all message types, routes to transcription/chat/storage
-- **Transcription** (`src/transcription/`) — AssemblyAI with speaker diarization and auto language detection
-- **AI chat** — OpenAI-compatible endpoint for conversation and summarization
-- **File analysis** — Claude Agent SDK spawns an autonomous agent that reads your stored files and answers questions
+Like OpenClaw, the bot uses a messaging platform (Telegram) as the primary interface, with modular AI capabilities behind it:
+
+- **Telegram bot** (`telegram_bot.py`) — message router: voice → transcription, text → conversation, files → storage
+- **Transcription** — AssemblyAI with speaker diarization, auto language detection, multi-format support
+- **Conversation** — OpenAI-compatible LLM for chat, summarization, and Q&A
+- **Claude Code Agent** — autonomous agent (via Claude Agent SDK) that reads your stored files and answers questions with full context
 - **Storage** — unified `data/{bot_name}/YYYY/MM/DD/` structure, identical paths locally and on S3
 - **S3 sync** — bidirectional: pulls from S3 on startup, pushes after every write
+- **Web dashboard** — React pipeline visualization showing module status, deployment info, and live configuration
 
 ## What's Next
 
