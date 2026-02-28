@@ -5,11 +5,10 @@
 ## Free and open source.
 
 Self-host with your own API keys. Free forever. MIT licensed.
+<img width="1327" height="672" alt="Screenshot 2026-02-19 at 12 16 31 PM" src="https://github.com/user-attachments/assets/f7da764c-5df2-4a10-b6d9-7bf2d09c4d9c" />
 
-https://github.com/user-attachments/assets/37a70d2d-ba9c-4335-b466-da24bbf3b4c4
+https://github.com/user-attachments/assets/d9013853-9d44-43d6-b1a4-dfdad1989480
 
-
-<img width="1418" height="715" alt="notesly_deployment_config_sample" src="https://github.com/user-attachments/assets/40c2bb60-1818-4f9b-ac5e-1b3849beb16a" />
 
 ## Core Value
 
