@@ -1,0 +1,253 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - '**/*.rst'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'CLAUDE.md'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  APP_NAME: transcribe-bot
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR repository if not exists
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.APP_NAME }} --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws ecr create-repository --repository-name ${{ env.APP_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Build, tag, and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/${{ env.APP_NAME }}:$IMAGE_TAG -t $ECR_REGISTRY/${{ env.APP_NAME }}:latest .
+          docker push $ECR_REGISTRY/${{ env.APP_NAME }}:$IMAGE_TAG
+          docker push $ECR_REGISTRY/${{ env.APP_NAME }}:latest
+
+      - name: Create CloudWatch log group if not exists
+        run: |
+          aws logs describe-log-groups --log-group-name-prefix /ecs/${{ env.APP_NAME }} --region ${{ env.AWS_REGION }} | \
+          grep -q "/ecs/${{ env.APP_NAME }}" || \
+          aws logs create-log-group --log-group-name /ecs/${{ env.APP_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Create ECS cluster if not exists
+        run: |
+          aws ecs describe-clusters --clusters ${{ env.APP_NAME }} --region ${{ env.AWS_REGION }} \
+            --query 'clusters[?status==`ACTIVE`].clusterName' --output text | grep -q "${{ env.APP_NAME }}" || \
+          aws ecs create-cluster --cluster-name ${{ env.APP_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Ensure ECS task execution role
+        run: |
+          aws iam get-role --role-name ecsTaskExecutionRole 2>/dev/null || {
+            aws iam create-role \
+              --role-name ecsTaskExecutionRole \
+              --assume-role-policy-document '{
+                "Version": "2012-10-17",
+                "Statement": [{
+                  "Effect": "Allow",
+                  "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                  "Action": "sts:AssumeRole"
+                }]
+              }'
+            aws iam attach-role-policy \
+              --role-name ecsTaskExecutionRole \
+              --policy-arn arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+          }
+
+      - name: Ensure ECS task role (for S3 access)
+        run: |
+          aws iam get-role --role-name ecsTaskRole 2>/dev/null || {
+            aws iam create-role \
+              --role-name ecsTaskRole \
+              --assume-role-policy-document '{
+                "Version": "2012-10-17",
+                "Statement": [{
+                  "Effect": "Allow",
+                  "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                  "Action": "sts:AssumeRole"
+                }]
+              }'
+          }
+          # Ensure S3 read/write/list access for file storage + startup sync
+          aws iam put-role-policy \
+            --role-name ecsTaskRole \
+            --policy-name S3TranscriptAccess \
+            --policy-document '{
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:PutObject", "s3:GetObject"],
+                  "Resource": "arn:aws:s3:::'"${{ secrets.S3_BUCKET }}"'/*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:ListBucket"],
+                  "Resource": "arn:aws:s3:::'"${{ secrets.S3_BUCKET }}"'"
+                }
+              ]
+            }' 2>/dev/null || true
+
+      - name: Register task definition
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          aws ecs register-task-definition \
+            --family ${{ env.APP_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --requires-compatibilities FARGATE \
+            --network-mode awsvpc \
+            --cpu 2048 \
+            --memory 4096 \
+            --execution-role-arn "arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskExecutionRole" \
+            --task-role-arn "arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskRole" \
+            --volumes '[{"name": "telegram-bot-api-data", "host": {}}]' \
+            --container-definitions '[{
+              "name": "${{ env.APP_NAME }}",
+              "image": "'"$ECR_REGISTRY/${{ env.APP_NAME }}:latest"'",
+              "essential": true,
+              "portMappings": [
+                {"containerPort": 8080, "hostPort": 8080, "protocol": "tcp"}
+              ],
+              "mountPoints": [
+                {"sourceVolume": "telegram-bot-api-data", "containerPath": "/var/lib/telegram-bot-api"}
+              ],
+              "healthCheck": {
+                "command": ["CMD-SHELL", "curl -f http://localhost:8080/api/health || exit 1"],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3,
+                "startPeriod": 60
+              },
+              "environment": [
+                {"name": "ASSEMBLY_API_KEY", "value": "${{ secrets.ASSEMBLY_API_KEY }}"},
+                {"name": "TELEGRAM_BOT_TOKEN", "value": "${{ secrets.TELEGRAM_BOT_TOKEN }}"},
+                {"name": "OPENAI_API_KEY", "value": "${{ secrets.OPENAI_API_KEY }}"},
+                {"name": "OPENAI_BASE_URL", "value": "${{ secrets.OPENAI_BASE_URL }}"},
+                {"name": "OPENAI_MODEL", "value": "${{ secrets.OPENAI_MODEL }}"},
+                {"name": "GLM_API_KEY", "value": "${{ secrets.GLM_API_KEY }}"},
+                {"name": "GLM_MODEL", "value": "${{ secrets.GLM_MODEL }}"},
+                {"name": "ANTHROPIC_BASE_URL", "value": "${{ secrets.ANTHROPIC_BASE_URL }}"},
+                {"name": "S3_BUCKET", "value": "${{ secrets.S3_BUCKET }}"},
+                {"name": "BOT_NAME", "value": "${{ secrets.BOT_NAME }}"},
+                {"name": "TELEGRAM_API_SERVER", "value": "http://localhost:8081"},
+                {"name": "ZOOM_CLIENT_ID", "value": "${{ secrets.ZOOM_CLIENT_ID }}"},
+                {"name": "ZOOM_CLIENT_SECRET", "value": "${{ secrets.ZOOM_CLIENT_SECRET }}"},
+                {"name": "ZOOM_REDIRECT_URI", "value": "${{ secrets.ZOOM_REDIRECT_URI }}"},
+                {"name": "INSFORGE_URL", "value": "${{ secrets.INSFORGE_URL }}"},
+                {"name": "INSFORGE_ANON_KEY", "value": "${{ secrets.INSFORGE_ANON_KEY }}"},
+                {"name": "CORS_ORIGINS", "value": "${{ secrets.CORS_ORIGINS }}"}
+              ],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/${{ env.APP_NAME }}",
+                  "awslogs-region": "${{ env.AWS_REGION }}",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            },
+            {
+              "name": "telegram-bot-api",
+              "image": "aiogram/telegram-bot-api:latest",
+              "essential": false,
+              "portMappings": [
+                {"containerPort": 8081, "hostPort": 8081, "protocol": "tcp"}
+              ],
+              "mountPoints": [
+                {"sourceVolume": "telegram-bot-api-data", "containerPath": "/var/lib/telegram-bot-api"}
+              ],
+              "environment": [
+                {"name": "TELEGRAM_API_ID", "value": "${{ secrets.TELEGRAM_API_ID }}"},
+                {"name": "TELEGRAM_API_HASH", "value": "${{ secrets.TELEGRAM_API_HASH }}"},
+                {"name": "TELEGRAM_LOCAL", "value": "1"}
+              ],
+              "command": ["--local", "--http-port=8081"],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "/ecs/${{ env.APP_NAME }}",
+                  "awslogs-region": "${{ env.AWS_REGION }}",
+                  "awslogs-stream-prefix": "ecs-telegram-api"
+                }
+              }
+            }]'
+
+      - name: Deploy ECS service
+        run: |
+          # Check if service exists and is active
+          SERVICE_STATUS=$(aws ecs describe-services --cluster ${{ env.APP_NAME }} --services ${{ env.APP_NAME }} \
+            --region ${{ env.AWS_REGION }} --query 'services[0].status' --output text 2>/dev/null || echo "MISSING")
+
+          if [ "$SERVICE_STATUS" = "ACTIVE" ]; then
+            echo "Updating existing service..."
+            aws ecs update-service \
+              --cluster ${{ env.APP_NAME }} \
+              --service ${{ env.APP_NAME }} \
+              --task-definition ${{ env.APP_NAME }} \
+              --force-new-deployment \
+              --region ${{ env.AWS_REGION }}
+          else
+            echo "Creating new service..."
+            VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --region ${{ env.AWS_REGION }} \
+              --query 'Vpcs[0].VpcId' --output text)
+            SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" --region ${{ env.AWS_REGION }} \
+              --query 'Subnets[*].SubnetId' --output text | tr '\t' ',')
+
+            # Create or get security group
+            SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=${{ env.APP_NAME }}-sg" "Name=vpc-id,Values=$VPC_ID" \
+              --region ${{ env.AWS_REGION }} --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null)
+            if [ "$SG_ID" = "None" ] || [ -z "$SG_ID" ]; then
+              SG_ID=$(aws ec2 create-security-group \
+                --group-name "${{ env.APP_NAME }}-sg" \
+                --description "Security group for ${{ env.APP_NAME }}" \
+                --vpc-id "$VPC_ID" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'GroupId' --output text)
+            fi
+
+            aws ecs create-service \
+              --cluster ${{ env.APP_NAME }} \
+              --service-name ${{ env.APP_NAME }} \
+              --task-definition ${{ env.APP_NAME }} \
+              --desired-count 1 \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" \
+              --region ${{ env.AWS_REGION }}
+          fi
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.APP_NAME }} \
+            --services ${{ env.APP_NAME }} \
+            --region ${{ env.AWS_REGION }} || true
+          echo "Deployment complete!"
+          echo ""
+          echo "View logs: aws logs tail /ecs/${{ env.APP_NAME }} --follow --region ${{ env.AWS_REGION }}"
