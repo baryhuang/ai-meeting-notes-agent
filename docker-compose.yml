@@ -1,0 +1,30 @@
+services:
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
+    command: >
+      --local
+      --api-id=${TELEGRAM_API_ID}
+      --api-hash=${TELEGRAM_API_HASH}
+      --http-port=8081
+
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    environment:
+      TELEGRAM_API_SERVER: http://telegram-bot-api:8081
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
+    depends_on:
+      - telegram-bot-api
+
+volumes:
+  telegram-bot-api-data:
