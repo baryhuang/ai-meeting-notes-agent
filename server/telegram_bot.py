@@ -748,40 +748,9 @@ def main():
     tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    # ── Zoom integration setup ──────────────────────────────────
-    insforge_url = os.getenv("INSFORGE_URL", "")
-    insforge_anon_key = os.getenv("INSFORGE_ANON_KEY", "")
-    zoom_client_id = os.getenv("ZOOM_CLIENT_ID", "")
-    zoom_client_secret = os.getenv("ZOOM_CLIENT_SECRET", "")
-    zoom_poll_interval = int(os.getenv("ZOOM_POLL_INTERVAL", "300"))
-
-    zoom_configured = all([insforge_url, insforge_anon_key, zoom_client_id, zoom_client_secret])
-
-    if zoom_configured:
-        from server.src.zoom.insforge_db import InsForgeDB
-        from server.src.zoom.client import ZoomClient
-        from server.src.zoom.oauth import router as zoom_oauth_router, init_insforge
-        from server.src.zoom.poller import zoom_poll_loop
-
-        insforge_db = InsForgeDB(insforge_url, insforge_anon_key)
-        zoom_client = ZoomClient(zoom_client_id, zoom_client_secret, insforge_db)
-        init_insforge(insforge_db)
-        logger.info("Zoom integration configured — OAuth endpoints and poller enabled")
-    else:
-        logger.info("Zoom integration disabled (missing ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, INSFORGE_URL, or INSFORGE_ANON_KEY)")
-
     async def run_all():
         """Run Telegram bot polling and FastAPI web server concurrently."""
         from server.api_server import app as fastapi_app
-
-        # Mount Zoom OAuth routes if configured
-        if zoom_configured:
-            fastapi_app.include_router(zoom_oauth_router, prefix="/api/oauth/zoom")
-
-            @fastapi_app.get("/api/zoom/transcripts")
-            async def list_zoom_transcripts(limit: int = 50, offset: int = 0):
-                meetings = await insforge_db.get_processed_meetings(limit, offset)
-                return {"transcripts": meetings}
 
         # Configure uvicorn
         config = uvicorn.Config(
@@ -814,41 +783,10 @@ def main():
             logger.info("Bot started. Listening for voice memos, text, and files...")
             logger.info(f"Dashboard available at http://0.0.0.0:{config.port}")
 
-            # Start Zoom poller if token exists
-            zoom_task = None
-            if zoom_configured:
-                try:
-                    has_token = await zoom_client.load_token()
-                    if has_token:
-                        bot_state.zoom_enabled = True
-                        token_data = await insforge_db.get_zoom_token()
-                        if token_data:
-                            bot_state.zoom_email = token_data.get("zoom_email", "")
-                        logger.info(f"Zoom connected as {bot_state.zoom_email}")
-
-                    # Start poller regardless — it will wait for a token if none exists
-                    def _save_file_wrapper(prefix, filename, data):
-                        _save_file(s3_client, s3_bucket, prefix, filename, data)
-
-                    zoom_task = asyncio.create_task(
-                        zoom_poll_loop(
-                            zoom_client=zoom_client,
-                            insforge_db=insforge_db,
-                            data_dir=DATA_DIR,
-                            bot_name=bot_name,
-                            save_file_fn=_save_file_wrapper if s3_client else None,
-                            poll_interval=zoom_poll_interval,
-                        )
-                    )
-                except Exception as e:
-                    logger.error(f"Zoom poller startup failed: {e}")
-
             # Run web server (blocks until shutdown)
             await web_server.serve()
 
             # Cleanup
-            if zoom_task:
-                zoom_task.cancel()
             await tg_app.updater.stop()
             await tg_app.stop()
 

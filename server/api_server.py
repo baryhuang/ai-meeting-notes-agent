@@ -58,11 +58,6 @@ CONFIG_SCHEMA = [
     {"key": "BOT_NAME", "group": "Storage", "label": "Bot Name", "default": "transcribe-bot"},
     {"key": "AWS_REGION", "group": "Storage", "label": "AWS Region", "default": "us-east-1"},
     {"key": "WEB_PORT", "group": "Server", "label": "Web Port", "default": "8080"},
-    {"key": "ZOOM_CLIENT_ID", "group": "Zoom Integration", "label": "Client ID"},
-    {"key": "ZOOM_CLIENT_SECRET", "group": "Zoom Integration", "label": "Client Secret", "secret": True},
-    {"key": "ZOOM_REDIRECT_URI", "group": "Zoom Integration", "label": "Redirect URI", "default": "http://localhost:8080/api/oauth/zoom/callback"},
-    {"key": "INSFORGE_URL", "group": "Zoom Integration", "label": "InsForge URL", "default": "https://gx2m4dge.us-east.insforge.app"},
-    {"key": "INSFORGE_ANON_KEY", "group": "Zoom Integration", "label": "InsForge Anon Key", "secret": True},
 ]
 
 _KNOWN_KEYS = {item["key"] for item in CONFIG_SCHEMA}
@@ -162,12 +157,6 @@ async def status():
                 "s3": state.s3_enabled,
                 "s3_bucket": state.s3_bucket,
             },
-        },
-        "zoom": {
-            "enabled": state.zoom_enabled,
-            "email": state.zoom_email,
-            "transcript_count": state.zoom_transcript_count,
-            "last_poll": state.zoom_last_poll.isoformat() if state.zoom_last_poll else None,
         },
         "counters": {
             "transcriptions": state.transcription_count,

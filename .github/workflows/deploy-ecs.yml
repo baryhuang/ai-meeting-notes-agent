@@ -156,11 +156,6 @@ jobs:
                 {"name": "S3_BUCKET", "value": "${{ secrets.S3_BUCKET }}"},
                 {"name": "BOT_NAME", "value": "${{ secrets.BOT_NAME }}"},
                 {"name": "TELEGRAM_API_SERVER", "value": "http://localhost:8081"},
-                {"name": "ZOOM_CLIENT_ID", "value": "${{ secrets.ZOOM_CLIENT_ID }}"},
-                {"name": "ZOOM_CLIENT_SECRET", "value": "${{ secrets.ZOOM_CLIENT_SECRET }}"},
-                {"name": "ZOOM_REDIRECT_URI", "value": "${{ secrets.ZOOM_REDIRECT_URI }}"},
-                {"name": "INSFORGE_URL", "value": "${{ secrets.INSFORGE_URL }}"},
-                {"name": "INSFORGE_ANON_KEY", "value": "${{ secrets.INSFORGE_ANON_KEY }}"},
                 {"name": "CORS_ORIGINS", "value": "${{ secrets.CORS_ORIGINS }}"}
               ],
               "logConfiguration": {

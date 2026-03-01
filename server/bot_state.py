@@ -18,12 +18,6 @@ class BotState:
     glm_model: str = ""
     anthropic_base_url: str = ""
 
-    # Zoom integration
-    zoom_enabled: bool = False
-    zoom_email: str = ""
-    zoom_transcript_count: int = 0
-    zoom_last_poll: datetime | None = None
-
     # Counters (incremented by handlers)
     transcription_count: int = 0
     chat_count: int = 0
