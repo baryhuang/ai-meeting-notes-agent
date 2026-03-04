@@ -1,12 +1,10 @@
 # ai-meeting-notes-agent
 
-> I kept losing decisions my co-founder and I made in conversation. So I built this.
+> Every founding team makes their best decisions in conversation. Then loses them. So I built a system of record for everything said out loud.
 
-My co-founder and I argued for 20 minutes about what we agreed on in a meeting. We were both there. We both remembered it differently. Nobody wrote it down.
+Every startup I know has this problem. You're in six meetings a day — investors, customers, advisors, co-founder syncs. The most important decisions are made verbally. A week later, nobody remembers the details. Code goes in GitHub. Tasks go in Linear. But verbal decisions? Customer insights from discovery calls? That idea you voice-memo'd yourself at midnight? There's no system of record for any of it.
 
-This happens constantly at early-stage startups. Six meetings a day — investors, customers, advisors, co-founder syncs. The most important decisions are made out loud. Code goes in GitHub. Tasks go in Linear. But verbal decisions? Customer insights from discovery calls? That idea you voice-memo'd yourself at midnight? There's no system of record for any of it.
-
-**So I built one.** A Telegram bot — record a voice memo, send it, get a transcript back with speaker labels. Then ask it questions across every conversation you've ever recorded: *"What did we agree on pricing?"* *"What did the customer say about onboarding?"* *"What did the investor say about our TAM?"*
+I'm a CTO. I don't buy SaaS tools when I can build them. So I built a Telegram bot — record a voice memo, send it, get a transcript back with speaker labels. Then ask it questions across every conversation you've ever recorded: *"What did we agree on pricing?"* *"What did the customer say about onboarding?"* *"What did the investor say about our TAM?"*
 
 I open-sourced it because I think builders should show their work, not just talk about AI. This is production code my team actually uses.
 
@@ -20,8 +18,8 @@ https://github.com/user-attachments/assets/d9013853-9d44-43d6-b1a4-dfdad1989480
 
 ## Why I Built This
 
-- **I kept losing decisions.** My co-founder and I would agree on something in a call. A week later, neither of us remembered the details. Nobody wrote it down.
-- **Customer insights vanished.** We'd do 8 discovery calls in a week. By Friday, I couldn't remember which customer said what about onboarding vs. pricing.
+- **Verbal decisions have no system of record.** Every founding team agrees on things in calls. A week later, nobody remembers the details. That's how teams end up misaligned.
+- **Customer insights vanish.** You do 8 discovery calls in a week. By Friday, you can't remember which customer said what about onboarding vs. pricing. You end up building the wrong thing.
 - **Voice memos were a dead end.** iPhone Voice Memos is the best recorder ever made — one tap from the lock screen. But I had hundreds of recordings I'd never listen to again.
 - **Recording apps solve the wrong problem.** Granola, Otter, Fireflies — they want you to download their app, and your recordings live on their servers. I'm a CTO. I don't buy SaaS tools when I can build them.
 - **What was missing was the bridge.** Transcription that feeds into an AI agent with memory of every conversation my team has had.
