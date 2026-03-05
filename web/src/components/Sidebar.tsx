@@ -25,43 +25,45 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
         <div className="sub">Feb 23 {'\u2013'} Mar 5, 2026</div>
       </div>
 
-      <div className="nav-section">Overview</div>
-      <div
-        className={`nav-item${currentView === 'overview' ? ' active' : ''}`}
-        onClick={() => handleClick('overview')}
-      >
-        <span className="icon">{'\uD83D\uDDFA\uFE0F'}</span>Mindmap
-      </div>
-
-      <div className="nav-divider" />
-      <div className="nav-section">Dimensions (D3 Tree)</div>
-      {dimensions.map((dim, i) => (
+      <div className="sidebar-nav">
+        <div className="nav-section">Overview</div>
         <div
-          key={dim.id}
-          className={`nav-item${currentView === 'd3' && currentDimIndex === i ? ' active' : ''}`}
-          onClick={() => handleClick('d3', i)}
+          className={`nav-item${currentView === 'overview' ? ' active' : ''}`}
+          onClick={() => handleClick('overview')}
         >
-          <span className="icon">{dim.icon}</span>
-          {dim.title.replace(/决策树$/, '')}
-          <span className="num">{NUM_LABELS[i]}</span>
+          <span className="icon">{'\uD83D\uDDFA\uFE0F'}</span>Mindmap
         </div>
-      ))}
 
-      <div className="nav-divider" />
-      <div className="nav-section">Competitive</div>
-      <div
-        className={`nav-item${currentView === 'competitor' ? ' active' : ''}`}
-        onClick={() => handleClick('competitor')}
-      >
-        <span className="icon">{'\u2694\uFE0F'}</span>Competitor Evolution
-      </div>
+        <div className="nav-divider" />
+        <div className="nav-section">Dimensions (D3 Tree)</div>
+        {dimensions.map((dim, i) => (
+          <div
+            key={dim.id}
+            className={`nav-item${currentView === 'd3' && currentDimIndex === i ? ' active' : ''}`}
+            onClick={() => handleClick('d3', i)}
+          >
+            <span className="icon">{dim.icon}</span>
+            {dim.title.replace(/决策树$/, '')}
+            <span className="num">{NUM_LABELS[i]}</span>
+          </div>
+        ))}
 
-      <div className="nav-divider" />
-      <div
-        className={`nav-item${currentView === 'executive-report' ? ' active' : ''}`}
-        onClick={() => handleClick('executive-report')}
-      >
-        <span className="icon">{'\uD83D\uDCCA'}</span>Executive Report
+        <div className="nav-divider" />
+        <div className="nav-section">Competitive</div>
+        <div
+          className={`nav-item${currentView === 'competitor' ? ' active' : ''}`}
+          onClick={() => handleClick('competitor')}
+        >
+          <span className="icon">{'\u2694\uFE0F'}</span>Competitor Evolution
+        </div>
+
+        <div className="nav-divider" />
+        <div
+          className={`nav-item${currentView === 'executive-report' ? ' active' : ''}`}
+          onClick={() => handleClick('executive-report')}
+        >
+          <span className="icon">{'\uD83D\uDCCA'}</span>Executive Report
+        </div>
       </div>
 
       <div className="sidebar-legend">

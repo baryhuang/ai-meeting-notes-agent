@@ -59,6 +59,12 @@ body::before {
   box-shadow: 2px 0 20px rgba(42,37,32,0.06);
   z-index: 10;
   position: relative;
+  overflow: hidden;
+}
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 8px;
 }
 
 /* Decorative top accent line */
