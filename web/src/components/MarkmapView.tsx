@@ -92,44 +92,32 @@ function ordinalToLabel(ord: number): string {
 }
 
 /**
- * Walk the markmap internal data tree and set fold state based on date cutoff.
- * Nodes with dateOrd > cutoff get folded (fold=1) so they collapse into parent.
- * Nodes with dateOrd <= cutoff get unfolded (fold=0).
- * Returns true if any fold state changed.
+ * Walk the markmap internal data tree, stash full children list per node,
+ * then splice children to only those with dateOrd <= cutoff.
+ * Preserves same node objects so D3 keys stay stable → parent-anchored animations.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyDateFold(node: any, cutoff: number): boolean {
-  let changed = false;
-  if (!node) return changed;
+function applyDateFilter(node: any, cutoff: number): void {
+  if (!node) return;
 
-  const dateOrd = node.payload?.dateOrd as number | undefined;
-
-  if (dateOrd !== undefined && dateOrd > cutoff) {
-    // This node's date is after cutoff — fold it (hide children)
-    // We fold the PARENT perspective: this node should be hidden.
-    // Since markmap fold hides children (not self), we fold this node's children
-    // AND mark this node itself for its parent to fold.
-    if (!node.payload?.fold || node.payload.fold !== 1) {
-      node.payload = { ...node.payload, fold: 1 };
-      changed = true;
-    }
-  } else {
-    // This node is visible — unfold it
-    if (node.payload?.fold) {
-      node.payload = { ...node.payload, fold: 0 };
-      changed = true;
-    }
+  // Stash full children on first visit
+  if (!node._allChildren && node.children) {
+    node._allChildren = [...node.children];
   }
 
-  // Recurse into children
-  const children = node.children as unknown[];
-  if (children) {
-    for (const child of children) {
-      if (applyDateFold(child, cutoff)) changed = true;
-    }
-  }
+  const all = node._allChildren || [];
 
-  return changed;
+  // Keep children whose dateOrd <= cutoff (or no dateOrd = structural)
+  node.children = all.filter((child: { payload?: Record<string, unknown> }) => {
+    const dateOrd = child.payload?.dateOrd as number | undefined;
+    if (dateOrd !== undefined && dateOrd > cutoff) return false;
+    return true;
+  });
+
+  // Recurse
+  for (const child of node.children) {
+    applyDateFilter(child, cutoff);
+  }
 }
 
 /* ── Shared Timeline Bar ───────────────────────── */
@@ -198,6 +186,89 @@ function TimelineBar({ allDates, dateIndex, setDateIndex }: TimelineBarProps) {
   );
 }
 
+/* ── Shared markmap + timeline hook ────────────── */
+
+function useMarkmapTimeline(
+  svgRef: React.RefObject<SVGSVGElement | null>,
+  fullRoot: INode | null,
+  allDates: number[],
+  expandLevel: number,
+  onFitRequest: boolean,
+  options: { spacingH: number; spacingV: number; maxW: number },
+) {
+  const mmRef = useRef<Markmap | null>(null);
+  const cutoffRef = useRef<number>(Infinity);
+  const mountedRef = useRef(false);
+
+  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+
+  // Reset to last date when dates change
+  useEffect(() => {
+    setDateIndex(allDates.length - 1);
+  }, [allDates]);
+
+  const currentCutoff = allDates[dateIndex] ?? Infinity;
+  cutoffRef.current = currentCutoff;
+
+  // Create markmap (or recreate on expandLevel/fullRoot change)
+  useEffect(() => {
+    if (!svgRef.current || !fullRoot) return;
+    svgRef.current.innerHTML = '';
+    mountedRef.current = false;
+
+    const fresh = cloneINode(fullRoot);
+    const derived = deriveOptions({
+      color: MARKMAP_COLORS,
+      spacingHorizontal: options.spacingH,
+      spacingVertical: options.spacingV,
+      paddingX: 10,
+      maxWidth: options.maxW,
+      duration: 500,
+      initialExpandLevel: expandLevel === -1 ? -1 : expandLevel,
+    });
+    const mm = Markmap.create(svgRef.current, derived, fresh);
+    mmRef.current = mm;
+
+    // Apply initial date filter after markmap has laid out
+    // Use requestAnimationFrame to let the initial render complete
+    requestAnimationFrame(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = (mm as any).state?.data;
+      if (data && cutoffRef.current !== Infinity) {
+        applyDateFilter(data, cutoffRef.current);
+        mm.renderData().then(() => mm.fit());
+      }
+      mountedRef.current = true;
+    });
+
+    return () => {
+      mmRef.current = null;
+      mountedRef.current = false;
+    };
+  }, [fullRoot, expandLevel, svgRef, options.spacingH, options.spacingV, options.maxW]);
+
+  // On date change (after mount): mutate internal data, animate
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    const mm = mmRef.current;
+    if (!mm) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (mm as any).state?.data;
+    if (!data) return;
+
+    applyDateFilter(data, currentCutoff);
+    mm.renderData().then(() => mm.fit());
+  }, [currentCutoff]);
+
+  // Fit on request
+  useEffect(() => {
+    if (onFitRequest && mmRef.current) mmRef.current.fit();
+  }, [onFitRequest]);
+
+  return { dateIndex, setDateIndex };
+}
+
 /* ── Overview markmap ──────────────────────────── */
 
 function buildOverviewRoot(
@@ -243,65 +314,24 @@ interface MarkmapViewProps {
   onFitRequest: boolean;
 }
 
+const OVERVIEW_OPTS = { spacingH: 80, spacingV: 6, maxW: 280 };
+
 export function MarkmapView({ dimensions, dimensionsData, competitorData, expandLevel, onFitRequest }: MarkmapViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const mmRef = useRef<Markmap | null>(null);
 
   const allDates = useMemo(() => {
     const trees = Object.values(dimensionsData);
     return trees.length > 0 ? collectDatesFromMultiple(trees) : [];
   }, [dimensionsData]);
 
-  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
-
-  useEffect(() => {
-    setDateIndex(allDates.length - 1);
-  }, [allDates]);
-
-  const currentCutoff = allDates[dateIndex] ?? Infinity;
-
-  // Build full INode tree (all dates, no filtering)
   const fullRoot = useMemo(() => {
     if (dimensions.length === 0 || Object.keys(dimensionsData).length === 0) return null;
     return buildOverviewRoot(dimensions, dimensionsData, competitorData);
   }, [dimensions, dimensionsData, competitorData]);
 
-  // Create markmap once with full tree
-  useEffect(() => {
-    if (!svgRef.current || !fullRoot) return;
-    svgRef.current.innerHTML = '';
-    const fresh = cloneINode(fullRoot);
-    const derived = deriveOptions({
-      color: MARKMAP_COLORS,
-      spacingHorizontal: 80,
-      spacingVertical: 6,
-      paddingX: 10,
-      maxWidth: 280,
-      duration: 500,
-      initialExpandLevel: expandLevel === -1 ? -1 : expandLevel,
-    });
-    mmRef.current = Markmap.create(svgRef.current, derived, fresh);
-
-    return () => { mmRef.current = null; };
-  }, [fullRoot, expandLevel]);
-
-  // On date change: walk internal data tree, toggle fold, re-render
-  useEffect(() => {
-    const mm = mmRef.current;
-    if (!mm) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = (mm as any).state?.data;
-    if (!data) return;
-
-    const changed = applyDateFold(data, currentCutoff);
-    if (changed) {
-      mm.renderData().then(() => mm.fit());
-    }
-  }, [currentCutoff]);
-
-  useEffect(() => {
-    if (onFitRequest && mmRef.current) mmRef.current.fit();
-  }, [onFitRequest]);
+  const { dateIndex, setDateIndex } = useMarkmapTimeline(
+    svgRef, fullRoot, allDates, expandLevel, onFitRequest, OVERVIEW_OPTS,
+  );
 
   return (
     <div className="dim-view">
@@ -321,58 +351,17 @@ interface MarkmapDimensionViewProps {
   onFitRequest: boolean;
 }
 
+const DIM_OPTS = { spacingH: 80, spacingV: 8, maxW: 300 };
+
 export function MarkmapDimensionView({ treeData, expandLevel, onFitRequest }: MarkmapDimensionViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const mmRef = useRef<Markmap | null>(null);
 
   const allDates = useMemo(() => collectDates(treeData), [treeData]);
-  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
-
-  useEffect(() => {
-    setDateIndex(allDates.length - 1);
-  }, [allDates]);
-
-  const currentCutoff = allDates[dateIndex] ?? Infinity;
-
-  // Build full INode tree (all dates)
   const fullRoot = useMemo(() => jsonToINode(treeData, 0), [treeData]);
 
-  // Create markmap once with full tree
-  useEffect(() => {
-    if (!svgRef.current) return;
-    svgRef.current.innerHTML = '';
-    const fresh = cloneINode(fullRoot);
-    const derived = deriveOptions({
-      color: MARKMAP_COLORS,
-      spacingHorizontal: 80,
-      spacingVertical: 8,
-      paddingX: 10,
-      maxWidth: 300,
-      duration: 500,
-      initialExpandLevel: expandLevel === -1 ? -1 : expandLevel,
-    });
-    mmRef.current = Markmap.create(svgRef.current, derived, fresh);
-
-    return () => { mmRef.current = null; };
-  }, [fullRoot, expandLevel]);
-
-  // On date change: walk internal data tree, toggle fold, re-render
-  useEffect(() => {
-    const mm = mmRef.current;
-    if (!mm) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = (mm as any).state?.data;
-    if (!data) return;
-
-    const changed = applyDateFold(data, currentCutoff);
-    if (changed) {
-      mm.renderData().then(() => mm.fit());
-    }
-  }, [currentCutoff]);
-
-  useEffect(() => {
-    if (onFitRequest && mmRef.current) mmRef.current.fit();
-  }, [onFitRequest]);
+  const { dateIndex, setDateIndex } = useMarkmapTimeline(
+    svgRef, fullRoot, allDates, expandLevel, onFitRequest, DIM_OPTS,
+  );
 
   return (
     <div className="dim-view">
