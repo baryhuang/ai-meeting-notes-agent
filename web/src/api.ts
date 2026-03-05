@@ -1,21 +1,29 @@
 import type { DimensionMeta, TreeNode, CompetitorData } from './types';
+import { insforge } from './insforge';
 
-const BASE = '/api/atlas';
+const BUCKET = 'atlas-data';
+
+async function downloadJson<T>(filename: string): Promise<T> {
+  const { data: blob, error } = await insforge.storage
+    .from(BUCKET)
+    .download(filename);
+
+  if (error || !blob) {
+    throw new Error(`Failed to fetch ${filename}: ${error?.message ?? 'unknown error'}`);
+  }
+
+  const text = await blob.text();
+  return JSON.parse(text) as T;
+}
 
 export async function fetchDimensions(): Promise<DimensionMeta[]> {
-  const res = await fetch(`${BASE}/dimensions`);
-  if (!res.ok) throw new Error(`Failed to fetch dimensions: ${res.status}`);
-  return res.json();
+  return downloadJson<DimensionMeta[]>('dimensions.json');
 }
 
 export async function fetchDimensionData(name: string): Promise<TreeNode> {
-  const res = await fetch(`${BASE}/data/${name}`);
-  if (!res.ok) throw new Error(`Failed to fetch ${name}: ${res.status}`);
-  return res.json();
+  return downloadJson<TreeNode>(`${name}.json`);
 }
 
 export async function fetchCompetitorData(): Promise<CompetitorData> {
-  const res = await fetch(`${BASE}/data/competitor`);
-  if (!res.ok) throw new Error(`Failed to fetch competitor data: ${res.status}`);
-  return res.json();
+  return downloadJson<CompetitorData>('competitor.json');
 }
