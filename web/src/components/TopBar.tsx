@@ -27,6 +27,8 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
     desc = 'Vision & Roadmap Evolution \u00b7 Feb 23 \u2013 Mar 5, 2026';
   }
 
+  const showButtons = currentView === 'overview' || currentView === 'd3';
+
   const levelButtons = [
     { label: 'L2', value: 2 },
     { label: 'L3', value: 3 },
@@ -40,7 +42,7 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
         <h1>{title}</h1>
         <div className="desc">{desc}</div>
       </div>
-      {currentView === 'overview' && (
+      {showButtons && (
         <div className="actions">
           {levelButtons.map(b => (
             <button

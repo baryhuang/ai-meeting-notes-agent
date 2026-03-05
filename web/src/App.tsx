@@ -11,7 +11,7 @@ export default function App() {
   const { dimensions, dimensionsData, competitorData, loading, error } = useAtlasData();
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [currentDimIndex, setCurrentDimIndex] = useState(0);
-  const [expandLevel, setExpandLevel] = useState(2);
+  const [expandLevel, setExpandLevel] = useState(-1);
   const [fitRequest, setFitRequest] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
