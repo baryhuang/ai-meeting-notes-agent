@@ -10,17 +10,11 @@ class BotState:
     bot_name: str = ""
 
     # Module status
-    ai_enabled: bool = False
-    glm_enabled: bool = False
     s3_enabled: bool = False
     s3_bucket: str = ""
-    openai_model: str = ""
-    glm_model: str = ""
-    anthropic_base_url: str = ""
 
     # Counters (incremented by handlers)
     transcription_count: int = 0
-    chat_count: int = 0
     file_count: int = 0
     last_activity: datetime | None = None
 

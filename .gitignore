@@ -11,6 +11,7 @@ build/
 # Node / Web
 web/node_modules/
 web/dist/
+web/bun.lock
 
 # Data & transcripts
 data/

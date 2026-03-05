@@ -1,32 +1,28 @@
-"""FastAPI app — /api/status, /api/health, /api/config, and SPA static file serving."""
+"""FastAPI app — /api/status, /api/health, /api/atlas/*, and SPA static file serving."""
 
-import asyncio
+import json
 import os
 import platform
+import re
 import socket
-import sys
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from dotenv import dotenv_values, set_key, unset_key
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
 from server.bot_state import state
 
-app = FastAPI(title="Notesly API", docs_url=None, redoc_url=None)
+app = FastAPI(title="CareMojo API", docs_url=None, redoc_url=None)
 
-# CORS — allow the InsForge-hosted frontend (and localhost dev) to call the API
+# CORS — allow the frontend (and localhost dev) to call the API
 _cors_origins = [
-    "https://gx2m4dge.insforge.site",
     "http://localhost:5173",
     "http://localhost:8080",
 ]
-# Also allow any origin set via CORS_ORIGINS env var (comma-separated)
 _extra = os.getenv("CORS_ORIGINS", "")
 if _extra:
     _cors_origins.extend(o.strip() for o in _extra.split(",") if o.strip())
@@ -40,27 +36,15 @@ app.add_middleware(
 )
 
 WEB_DIST = Path(__file__).parent.parent / "web" / "dist"
-ENV_FILE = Path(__file__).parent.parent / ".env"
 
-# Known env vars with groups and descriptions
-CONFIG_SCHEMA = [
-    {"key": "TELEGRAM_BOT_TOKEN", "group": "Telegram", "label": "Bot Token", "required": True, "secret": True},
-    {"key": "TELEGRAM_API_ID", "group": "Telegram", "label": "API ID (local server)"},
-    {"key": "TELEGRAM_API_HASH", "group": "Telegram", "label": "API Hash (local server)", "secret": True},
-    {"key": "ASSEMBLY_API_KEY", "group": "Transcription", "label": "AssemblyAI API Key", "required": True, "secret": True},
-    {"key": "OPENAI_API_KEY", "group": "Conversation", "label": "API Key", "secret": True},
-    {"key": "OPENAI_BASE_URL", "group": "Conversation", "label": "Base URL", "default": "https://api.openai.com/v1"},
-    {"key": "OPENAI_MODEL", "group": "Conversation", "label": "Model", "default": "gpt-4o-mini"},
-    {"key": "GLM_API_KEY", "group": "Claude Code Agent", "label": "GLM API Key", "secret": True},
-    {"key": "GLM_MODEL", "group": "Claude Code Agent", "label": "Model", "default": "glm-4-plus"},
-    {"key": "ANTHROPIC_BASE_URL", "group": "Claude Code Agent", "label": "Anthropic Base URL", "default": "https://api.z.ai/api/anthropic"},
-    {"key": "S3_BUCKET", "group": "Storage", "label": "S3 Bucket"},
-    {"key": "BOT_NAME", "group": "Storage", "label": "Bot Name", "default": "transcribe-bot"},
-    {"key": "AWS_REGION", "group": "Storage", "label": "AWS Region", "default": "us-east-1"},
-    {"key": "WEB_PORT", "group": "Server", "label": "Web Port", "default": "8080"},
-]
+# Atlas data directory
+ATLAS_DATA_DIR = Path(
+    os.getenv("ATLAS_DATA_DIR",
+              str(Path(__file__).parent.parent / "data" / "reports" / "data"))
+)
 
-_KNOWN_KEYS = {item["key"] for item in CONFIG_SCHEMA}
+# Validate atlas resource names (alphanumeric + hyphens only)
+_ATLAS_NAME_RE = re.compile(r'^[a-zA-Z0-9-]+$')
 
 
 def _detect_deployment() -> dict:
@@ -68,23 +52,19 @@ def _detect_deployment() -> dict:
     env_type = "local"
     detail = platform.node() or "unknown"
 
-    # AWS ECS
     if os.environ.get("ECS_CONTAINER_METADATA_URI") or os.environ.get("ECS_CONTAINER_METADATA_URI_V4"):
         env_type = "aws-ecs"
         cluster = os.environ.get("ECS_CLUSTER", "")
         task_id = os.environ.get("ECS_TASK_ARN", "").rsplit("/", 1)[-1][:12] if os.environ.get("ECS_TASK_ARN") else ""
         detail = f"{cluster}/{task_id}" if cluster else "ECS"
-    # AWS EC2
     elif os.environ.get("AWS_EXECUTION_ENV") or (
         os.path.exists("/sys/hypervisor/uuid") and open("/sys/hypervisor/uuid").read(3) == "ec2"
     ):
         env_type = "aws-ec2"
         detail = platform.node()
-    # Docker (but not ECS)
     elif os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
         env_type = "docker"
         detail = platform.node()
-    # Systemd service
     elif os.environ.get("INVOCATION_ID"):
         env_type = "systemd"
         detail = platform.node()
@@ -140,17 +120,6 @@ async def status():
         "last_activity": state.last_activity.isoformat() if state.last_activity else None,
         "modules": {
             "transcription": {"enabled": True, "provider": "AssemblyAI"},
-            "chat": {
-                "enabled": state.ai_enabled,
-                "provider": "OpenAI-compatible",
-                "model": state.openai_model,
-            },
-            "file_analysis": {
-                "enabled": state.glm_enabled,
-                "provider": "GLM / Claude Agent",
-                "model": state.glm_model,
-                "base_url": state.anthropic_base_url,
-            },
             "storage": {
                 "enabled": True,
                 "local": True,
@@ -160,7 +129,6 @@ async def status():
         },
         "counters": {
             "transcriptions": state.transcription_count,
-            "chats": state.chat_count,
             "files": state.file_count,
         },
         "recent_errors": state.recent_errors,
@@ -168,63 +136,47 @@ async def status():
     }
 
 
-@app.get("/api/config")
-async def get_config():
-    values = dotenv_values(str(ENV_FILE)) if ENV_FILE.exists() else {}
-    result = []
-    for item in CONFIG_SCHEMA:
-        val = values.get(item["key"], "")
-        if item.get("secret") and val:
-            masked = "***" + val[-4:] if len(val) > 4 else "****"
-        else:
-            masked = val
-        result.append({**item, "value": masked, "is_set": bool(val)})
-    return {"config": result, "env_file": str(ENV_FILE)}
+# ── Atlas Data API ─────────────────────────────────────────────
+
+@app.get("/api/atlas/dimensions")
+async def atlas_dimensions():
+    """Serve dimensions.json from ATLAS_DATA_DIR."""
+    dims_file = ATLAS_DATA_DIR / "dimensions.json"
+    if not dims_file.exists():
+        raise HTTPException(status_code=404, detail="dimensions.json not found")
+    return JSONResponse(json.loads(dims_file.read_text()))
 
 
-class ConfigChanges(BaseModel):
-    changes: dict[str, str]
+@app.get("/api/atlas/data/{name}")
+async def atlas_get_data(name: str):
+    """Serve {name}.json from ATLAS_DATA_DIR."""
+    if not _ATLAS_NAME_RE.match(name):
+        raise HTTPException(status_code=400, detail="Invalid resource name")
+    data_file = ATLAS_DATA_DIR / f"{name}.json"
+    if not data_file.exists():
+        raise HTTPException(status_code=404, detail=f"{name}.json not found")
+    return JSONResponse(json.loads(data_file.read_text()))
 
 
-@app.post("/api/config")
-async def save_config(body: ConfigChanges):
-    # Ensure .env file exists
-    if not ENV_FILE.exists():
-        ENV_FILE.touch()
-
-    saved_keys = []
-    for key, value in body.changes.items():
-        if key not in _KNOWN_KEYS:
-            continue
-        if value == "":
-            unset_key(str(ENV_FILE), key)
-        else:
-            set_key(str(ENV_FILE), key, value)
-        saved_keys.append(key)
-    return {"status": "saved", "keys": saved_keys}
+@app.put("/api/atlas/data/{name}")
+async def atlas_put_data(name: str, request: Request):
+    """Write JSON body to {name}.json in ATLAS_DATA_DIR."""
+    if not _ATLAS_NAME_RE.match(name):
+        raise HTTPException(status_code=400, detail="Invalid resource name")
+    body = await request.json()
+    ATLAS_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    data_file = ATLAS_DATA_DIR / f"{name}.json"
+    data_file.write_text(json.dumps(body, ensure_ascii=False, indent=2))
+    return {"status": "saved", "file": f"{name}.json"}
 
 
-@app.post("/api/restart")
-async def restart():
-    """Restart the bot process to pick up new .env values."""
-    loop = asyncio.get_event_loop()
-    loop.call_later(0.5, _do_restart)
-    return {"status": "restarting"}
+# ── Static file serving ───────────────────────────────────────
 
-
-def _do_restart():
-    """Replace the current process with a fresh one."""
-    os.execv(sys.executable, [sys.executable] + sys.argv)
-
-
-# Mount static assets if the built frontend exists
 if WEB_DIST.exists() and (WEB_DIST / "index.html").exists():
-    # Mount assets with a specific path so it doesn't catch everything
     assets_dir = WEB_DIST / "assets"
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-    # Serve other static files at root (favicon, etc.)
     @app.get("/{path:path}")
     async def spa_fallback(path: str):
         # Try to serve the exact file first

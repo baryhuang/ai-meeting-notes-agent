@@ -1,35 +1,100 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AppRouting } from '@/routing/app-routing';
-import { ThemeProvider } from 'next-themes';
-import { HelmetProvider } from 'react-helmet-async';
-import { BrowserRouter } from 'react-router-dom';
-import { LoadingBarContainer } from 'react-top-loading-bar';
-import { Toaster } from '@/components/ui/sonner';
+import { useState, useCallback } from 'react';
+import { useAtlasData } from './hooks/useAtlasData';
+import { Sidebar } from './components/Sidebar';
+import { TopBar } from './components/TopBar';
+import { MarkmapView, MarkmapDimensionView } from './components/MarkmapView';
+import { CompetitorView } from './components/CompetitorView';
+import { ExecutiveReport } from './components/ExecutiveReport';
+import type { ViewType } from './types';
 
-const { BASE_URL } = import.meta.env;
+export default function App() {
+  const { dimensions, dimensionsData, competitorData, loading, error } = useAtlasData();
+  const [currentView, setCurrentView] = useState<ViewType>('overview');
+  const [currentDimIndex, setCurrentDimIndex] = useState(0);
+  const [expandLevel, setExpandLevel] = useState(2);
+  const [fitRequest, setFitRequest] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-const queryClient = new QueryClient();
+  const handleSwitch = useCallback((view: ViewType, dimIndex?: number) => {
+    setCurrentView(view);
+    if (dimIndex !== undefined) setCurrentDimIndex(dimIndex);
+  }, []);
 
-export function App() {
+  const handleExpandLevel = useCallback((level: number) => {
+    if (level === 0) {
+      // Fit request
+      setFitRequest(prev => !prev);
+    } else {
+      setExpandLevel(level);
+    }
+  }, []);
+
+  if (loading) {
+    return <div className="loading-screen">Loading Decision Atlas...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="error-screen">
+        <h2>Load Failed</h2>
+        <p>Please access via HTTP server (file:// protocol not supported)</p>
+        <pre>{error}</pre>
+      </div>
+    );
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="light"
-        storageKey="vite-theme"
-        enableSystem
-        disableTransitionOnChange
-        enableColorScheme
-      >
-        <HelmetProvider>
-          <LoadingBarContainer>
-            <BrowserRouter basename={BASE_URL}>
-              <Toaster />
-              <AppRouting />
-            </BrowserRouter>
-          </LoadingBarContainer>
-        </HelmetProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <>
+      <button className="mobile-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        {'\u2630'}
+      </button>
+      <div className="app">
+        <Sidebar
+          dimensions={dimensions}
+          currentView={currentView}
+          currentDimIndex={currentDimIndex}
+          onSwitch={handleSwitch}
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+        <div className="main">
+          {currentView !== 'executive-report' && (
+            <TopBar
+              currentView={currentView}
+              currentDimIndex={currentDimIndex}
+              dimensions={dimensions}
+              expandLevel={expandLevel}
+              onExpandLevel={handleExpandLevel}
+            />
+          )}
+
+          {currentView === 'overview' && (
+            <MarkmapView
+              dimensions={dimensions}
+              dimensionsData={dimensionsData}
+              competitorData={competitorData}
+              expandLevel={expandLevel}
+              onFitRequest={fitRequest}
+            />
+          )}
+
+          {currentView === 'd3' && dimensions[currentDimIndex] && dimensionsData[dimensions[currentDimIndex].id] && (
+            <MarkmapDimensionView
+              treeData={dimensionsData[dimensions[currentDimIndex].id]}
+              expandLevel={expandLevel}
+              onFitRequest={fitRequest}
+            />
+          )}
+
+          {currentView === 'competitor' && competitorData && (
+            <CompetitorView data={competitorData} />
+          )}
+
+          {currentView === 'executive-report' && (
+            <ExecutiveReport />
+          )}
+        </div>
+      </div>
+    </>
   );
 }

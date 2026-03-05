@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Telegram voice memo transcription bot with a web dashboard. Users send voice memos or files via Telegram, the bot transcribes with AssemblyAI (speaker diarization, auto language detection), and optionally syncs to S3. A React dashboard (Metronic) shows bot status, module health, and activity counters.
+Telegram voice memo transcription bot with a Decision Atlas web dashboard. Users send voice memos or files via Telegram, the bot transcribes with AssemblyAI (speaker diarization, auto language detection), and optionally syncs to S3. Text messages are saved as notes. The React + Bun frontend renders the Decision Atlas (markmap overview, D3 tree views, competitor analysis, executive report).
 
 ## Key Commands
 
@@ -21,7 +21,10 @@ python drive_watcher.py              # daemon mode
 python drive_watcher.py --dry-run    # list unprocessed files
 
 # Frontend dev
-cd web && npm install && npm run dev  # dashboard on :5173, proxies /api to :8080
+cd web && bun install && bun run dev  # dashboard on :5173, proxies /api to :8080
+
+# Frontend build
+cd web && bun run build               # outputs to web/dist/
 
 # Docker
 docker compose up --build             # bot + dashboard on :8080
@@ -34,16 +37,26 @@ chmod +x setup_server.sh && ./setup_server.sh
 
 ### Server (`server/`)
 - `server/telegram_bot.py` — Main entry point: Telegram bot + FastAPI on port 8080
-- `server/api_server.py` — FastAPI app (`/api/status`, `/api/health`, SPA serving)
+- `server/api_server.py` — FastAPI app (`/api/status`, `/api/health`, `/api/atlas/*`, SPA serving)
 - `server/bot_state.py` — Shared state singleton (module status, counters, errors)
 - `server/src/transcription/transcriber.py` — AssemblyAI integration, speaker diarization, transcript caching
 - `server/src/models/transcription.py` — TranscriptionSegment data class
 
-### Web (`web/`)
-- Metronic React starter kit (Layout 1 only)
-- `web/src/pages/dashboard/page.tsx` — Main dashboard page
-- `web/src/hooks/use-bot-status.ts` — react-query hook polling `/api/status`
+### Web (`web/`) — React + Vite + Bun
+- `web/src/App.tsx` — Main app with view state machine (overview, d3, competitor, executive-report)
+- `web/src/hooks/useAtlasData.ts` — Data fetching hook for atlas dimensions + JSON data
+- `web/src/components/MarkmapView.tsx` — Markmap mindmap overview
+- `web/src/components/D3TreeView.tsx` — D3 tree renderer for individual dimensions
+- `web/src/components/CompetitorView.tsx` — Competitor evolution stage view
+- `web/src/components/ExecutiveReport.tsx` — 13-slide executive report deck
+- `web/src/components/Sidebar.tsx` — Navigation sidebar
+- `web/src/components/TopBar.tsx` — Title bar with level buttons
 - `web/vite.config.ts` — Proxy `/api` to `:8080` in dev mode
+
+### Atlas Data (`data/reports/data/`)
+- `dimensions.json` — Metadata for all 8 decision dimensions
+- `market.json`, `product.json`, etc. — Tree data for each dimension
+- `competitor.json` — Competitive landscape evolution stages
 
 ### Root (standalone tools)
 - `transcribe.py` — CLI entry point, handles language detection and file discovery
@@ -51,13 +64,21 @@ chmod +x setup_server.sh && ./setup_server.sh
 - `scripts/rclone-sync.sh` — Pull files from / push transcripts to Google Drive
 - `systemd/` — Service files for Linux deployment
 
+## API Endpoints
+
+- `GET /api/health` — Health check
+- `GET /api/status` — Bot status, counters, deployment info
+- `GET /api/atlas/dimensions` — Atlas dimensions metadata
+- `GET /api/atlas/data/{name}` — Atlas dimension data (e.g., market, product, competitor)
+- `PUT /api/atlas/data/{name}` — Update atlas dimension data
+
 ## API Dependencies
 
 - `ASSEMBLY_API_KEY` — AssemblyAI for transcription with speaker diarization
 - `TELEGRAM_BOT_TOKEN` — Telegram Bot API
-- `OPENAI_API_KEY` (optional) — Chat and summarization
-- `GLM_API_KEY` (optional) — File analysis via Claude Agent SDK
+- `OPENAI_API_KEY` (optional) — Summarization
 - `S3_BUCKET` (optional) — S3 sync for file storage
+- `ATLAS_DATA_DIR` (optional) — Override atlas data directory (defaults to `data/reports/data/`)
 
 ## Language Detection
 
