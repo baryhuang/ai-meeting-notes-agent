@@ -27,5 +27,8 @@ Thumbs.db
 *.swp
 *.swo
 
+# MCP config (contains API keys)
+.mcp.json
+
 # uv
 .python-version
