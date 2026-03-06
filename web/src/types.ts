@@ -48,4 +48,15 @@ export interface CompetitorData {
   stages: CompetitorStage[];
 }
 
+export interface LandscapeCompany { name: string; threat: 'high' | 'medium' | 'low' }
+export interface LandscapeSubcategory { name: string; companies: LandscapeCompany[] }
+export interface LandscapeCategory { name: string; companies?: LandscapeCompany[]; subcategories?: LandscapeSubcategory[] }
+export interface LandscapeData {
+  title: string;
+  subtitle: string;
+  our_position: string;
+  white_space: string;
+  categories: LandscapeCategory[];
+}
+
 export type ViewType = 'overview' | 'd3' | 'competitor' | 'executive-report';

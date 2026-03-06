@@ -1,4 +1,4 @@
-import type { DimensionMeta, TreeNode, CompetitorData } from './types';
+import type { DimensionMeta, TreeNode, CompetitorData, LandscapeData } from './types';
 import { insforge } from './insforge';
 import { assembleTree } from './assembleTree';
 
@@ -167,4 +167,9 @@ export async function fetchCompetitorData(userId: string): Promise<CompetitorDat
 export async function fetchProgressData(userId: string): Promise<TreeNode> {
   if (isDev) return fetchLocalJson<TreeNode>('progress.json');
   return dbSelect<TreeNode>(userId, 'progress');
+}
+
+export async function fetchLandscapeData(userId: string): Promise<LandscapeData> {
+  if (isDev) return fetchLocalJson<LandscapeData>('landscape.json');
+  return dbSelect<LandscapeData>(userId, 'landscape');
 }

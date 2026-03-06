@@ -12,7 +12,7 @@ import type { ViewType } from './types';
 function AuthenticatedApp() {
   const { user } = useUser();
   const userId = user!.id;
-  const { dimensions, dimensionsData, competitorData, progressData, loading, error } = useAtlasData(userId);
+  const { dimensions, dimensionsData, competitorData, landscapeData, progressData, loading, error } = useAtlasData(userId);
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [currentDimIndex, setCurrentDimIndex] = useState(0);
   const [expandLevel, setExpandLevel] = useState(-1);
@@ -104,8 +104,8 @@ function AuthenticatedApp() {
             </>
           )}
 
-          {currentView === 'competitor' && competitorData && (
-            <CompetitorView data={competitorData} />
+          {currentView === 'competitor' && landscapeData && (
+            <CompetitorView data={landscapeData} />
           )}
 
           {currentView === 'executive-report' && (

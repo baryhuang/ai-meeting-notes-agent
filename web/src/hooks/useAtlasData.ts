@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { fetchDimensions, fetchDimensionData, fetchCompetitorData, fetchProgressData, initializeUserData } from '../api';
-import type { DimensionMeta, TreeNode, CompetitorData } from '../types';
+import { fetchDimensions, fetchDimensionData, fetchCompetitorData, fetchProgressData, fetchLandscapeData, initializeUserData } from '../api';
+import type { DimensionMeta, TreeNode, CompetitorData, LandscapeData } from '../types';
 
 interface AtlasData {
   dimensions: DimensionMeta[];
   dimensionsData: Record<string, TreeNode>;
   competitorData: CompetitorData | null;
+  landscapeData: LandscapeData | null;
   progressData: TreeNode | null;
   loading: boolean;
   error: string | null;
@@ -15,6 +16,7 @@ export function useAtlasData(userId: string): AtlasData {
   const [dimensions, setDimensions] = useState<DimensionMeta[]>([]);
   const [dimensionsData, setDimensionsData] = useState<Record<string, TreeNode>>({});
   const [competitorData, setCompetitorData] = useState<CompetitorData | null>(null);
+  const [landscapeData, setLandscapeData] = useState<LandscapeData | null>(null);
   const [progressData, setProgressData] = useState<TreeNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +35,7 @@ export function useAtlasData(userId: string): AtlasData {
           return { id: d.id, data };
         }),
         fetchCompetitorData(userId).then(data => ({ id: '__comp__', data })),
+        fetchLandscapeData(userId).then(data => ({ id: '__landscape__', data })).catch(() => ({ id: '__landscape__', data: null })),
         fetchProgressData(userId).then(data => ({ id: '__progress__', data })),
       ]);
 
@@ -42,6 +45,8 @@ export function useAtlasData(userId: string): AtlasData {
       for (const r of results) {
         if (r.id === '__comp__') {
           setCompetitorData(r.data as CompetitorData);
+        } else if (r.id === '__landscape__') {
+          setLandscapeData(r.data as LandscapeData);
         } else if (r.id === '__progress__') {
           setProgressData(r.data as TreeNode);
         } else {
@@ -75,5 +80,5 @@ export function useAtlasData(userId: string): AtlasData {
     return () => { cancelled = true; };
   }, [userId]);
 
-  return { dimensions, dimensionsData, competitorData, progressData, loading, error };
+  return { dimensions, dimensionsData, competitorData, landscapeData, progressData, loading, error };
 }
