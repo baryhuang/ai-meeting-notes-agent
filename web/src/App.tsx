@@ -4,6 +4,7 @@ import { useAtlasData } from './hooks/useAtlasData';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { MarkmapDimensionView } from './components/MarkmapView';
+import { OverviewView } from './components/OverviewView';
 import { CompetitorView } from './components/CompetitorView';
 import { SwimGanttView } from './components/SwimGanttView';
 import type { ViewType } from './types';
@@ -12,7 +13,7 @@ function AuthenticatedApp() {
   const { user } = useUser();
   const userId = user!.id;
   const { dimensions, dimensionsData, landscapeData, progressData, loading, error } = useAtlasData(userId);
-  const [currentView, setCurrentView] = useState<ViewType>('d3');
+  const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [currentDimIndex, setCurrentDimIndex] = useState(0);
   const [expandLevel, setExpandLevel] = useState(-1);
   const [fitRequest, setFitRequest] = useState(false);
@@ -71,6 +72,14 @@ function AuthenticatedApp() {
               expandLevel={expandLevel}
               onExpandLevel={handleExpandLevel}
             />
+
+          {currentView === 'overview' && (
+            <OverviewView
+              dimensions={dimensions}
+              dimensionsData={dimensionsData}
+              onSwitch={handleSwitch}
+            />
+          )}
 
           {currentView === 'd3' && dimensions[currentDimIndex] && dimensionsData[dimensions[currentDimIndex].id] && (
             <>

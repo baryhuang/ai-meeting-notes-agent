@@ -2,12 +2,12 @@ import { useRef, useEffect, useState, useMemo } from 'react';
 import { Markmap, deriveOptions } from 'markmap-view';
 import type { TreeNode } from '../types';
 
-const statusColors: Record<string, string> = {
+export const statusColors: Record<string, string> = {
   origin: '#3a6da0', abandoned: '#c94040', chosen: '#3a7d44',
   partial: '#c07820', excluded: '#8a9e8c', final: '#2a8a7a',
 };
 
-const statusIcons: Record<string, string> = {
+export const statusIcons: Record<string, string> = {
   abandoned: '\u274C', chosen: '\u2713', partial: '\u25D0',
   final: '\u2605', excluded: '\u2014', origin: '\u25CF',
 };
@@ -58,14 +58,14 @@ const MONTH_MAP: Record<string, number> = {
   Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
 };
 
-function parseDateOrdinal(dateStr: string): number | null {
+export function parseDateOrdinal(dateStr: string): number | null {
   if (!dateStr) return null;
   const m = dateStr.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d+)/);
   if (!m) return null;
   return MONTH_MAP[m[1]] * 100 + parseInt(m[2], 10);
 }
 
-function collectDates(node: TreeNode): number[] {
+export function collectDates(node: TreeNode): number[] {
   const dates: Set<number> = new Set();
   function walk(n: TreeNode) {
     const ord = parseDateOrdinal(n.date || '');
@@ -76,7 +76,7 @@ function collectDates(node: TreeNode): number[] {
   return Array.from(dates).sort((a, b) => a - b);
 }
 
-function ordinalToLabel(ord: number): string {
+export function ordinalToLabel(ord: number): string {
   const month = Math.floor(ord / 100);
   const day = ord % 100;
   const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -120,7 +120,7 @@ interface TimelineBarProps {
   setDateIndex: (i: number | ((prev: number) => number)) => void;
 }
 
-function TimelineBar({ allDates, dateIndex, setDateIndex }: TimelineBarProps) {
+export function TimelineBar({ allDates, dateIndex, setDateIndex }: TimelineBarProps) {
   const goPrev = () => setDateIndex((i: number) => Math.max(0, i - 1));
   const goNext = () => setDateIndex((i: number) => Math.min(allDates.length - 1, i + 1));
 

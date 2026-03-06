@@ -26,6 +26,13 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
       </div>
 
       <div className="sidebar-nav">
+        <div
+          className={`nav-item${currentView === 'overview' ? ' active' : ''}`}
+          onClick={() => handleClick('overview')}
+        >
+          <span className="icon">{'\uD83C\uDFE0'}</span>Overview
+        </div>
+
         <div className="nav-section">Decision Dimensions</div>
         {dimensions.map((dim, i) => (
           <div

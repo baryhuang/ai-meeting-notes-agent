@@ -12,7 +12,10 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
   let title = 'CareMojo Decision Atlas';
   let desc = '8 dimensions + competitive evolution';
 
-  if (currentView === 'd3' && dimensions[currentDimIndex]) {
+  if (currentView === 'overview') {
+    title = 'Executive Overview';
+    desc = 'Timeline view across all decision dimensions';
+  } else if (currentView === 'd3' && dimensions[currentDimIndex]) {
     const dim = dimensions[currentDimIndex];
     title = dim.title;
     desc = dim.desc;
