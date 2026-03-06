@@ -72,22 +72,11 @@ async function syncDocuments(keys: string[]): Promise<number> {
     return { user_id: USER_ID, doc_key: key, data: json, updated_at: now };
   });
 
-  // Upsert each document individually using PATCH (update) with fallback to POST (insert)
+  // Upsert each document using POST with merge-duplicates
   for (const row of rows) {
-    // Try update first
-    const patchResp = await restFetch(
-      `atlas_documents?user_id=eq.${encodeURIComponent(row.user_id)}&doc_key=eq.${encodeURIComponent(row.doc_key)}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ data: row.data, updated_at: row.updated_at }),
-      },
-    );
-
-    if (patchResp.ok) continue;
-
-    // If update matched nothing, insert
     const postResp = await restFetch('atlas_documents', {
       method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates' },
       body: JSON.stringify([row]),
     });
 
