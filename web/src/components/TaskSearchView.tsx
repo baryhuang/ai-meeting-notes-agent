@@ -1,6 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { searchTasks } from '../api';
 import type { LinearTask } from '../types';
+
+type SortMode = 'date' | 'relevance';
+
+function parseTaskDate(dateStr: string | undefined | null): number {
+  if (!dateStr) return 0;
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
 
 const PRESET_QUERIES = [
   { label: 'Todo tasks', query: 'tasks to do', filters: { status: 'Todo' } },
@@ -45,6 +53,12 @@ export function TaskSearchView() {
   const [searched, setSearched] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set(DEFAULT_HIDDEN));
+  const [sortMode, setSortMode] = useState<SortMode>('date');
+
+  const sortedResults = useMemo(() => {
+    if (sortMode === 'relevance') return results;
+    return [...results].sort((a, b) => parseTaskDate(b.Updated) - parseTaskDate(a.Updated));
+  }, [results, sortMode]);
 
   const toggleStatus = (status: string) => {
     setHiddenStatuses(prev => {
@@ -127,6 +141,22 @@ export function TaskSearchView() {
           ))}
         </div>
 
+        <div className="task-sort-row">
+          <span className="task-filter-label">Sort:</span>
+          <button
+            className={`task-sort-btn${sortMode === 'date' ? ' active' : ''}`}
+            onClick={() => setSortMode('date')}
+          >
+            Most Recent
+          </button>
+          <button
+            className={`task-sort-btn${sortMode === 'relevance' ? ' active' : ''}`}
+            onClick={() => setSortMode('relevance')}
+          >
+            Relevance
+          </button>
+        </div>
+
         <div className="task-presets">
           {PRESET_QUERIES.map((p) => (
             <button
@@ -144,7 +174,7 @@ export function TaskSearchView() {
           {!loading && searched && results.length === 0 && (
             <div className="task-empty">No matching tasks found.</div>
           )}
-          {!loading && results.map((task) => (
+          {!loading && sortedResults.map((task) => (
             <div key={task.ID} className="task-card">
               <div className="task-card-top">
                 <span className="task-id">{task.ID}</span>

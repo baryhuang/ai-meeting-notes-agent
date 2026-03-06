@@ -19,6 +19,7 @@ if (!API_KEY) {
 
 interface Company {
   name: string;
+  date?: string;
   website?: string;
   category?: string;
   primary_focus?: string;
@@ -65,6 +66,7 @@ interface Row {
   best_owner: string | null;
   subcategory: string | null;
   name: string;
+  added_date: string | null;
   website: string | null;
   category: string | null;
   primary_focus: string | null;
@@ -94,6 +96,7 @@ for (const cat of landscape.categories) {
         best_owner: cat.best_owner || null,
         subcategory: null,
         name: c.name,
+        added_date: c.date || null,
         website: c.website || null,
         category: c.category || null,
         primary_focus: c.primary_focus || null,
@@ -121,6 +124,7 @@ for (const cat of landscape.categories) {
           best_owner: cat.best_owner || null,
           subcategory: sub.name,
           name: c.name,
+          added_date: c.date || null,
           website: c.website || null,
           category: c.category || null,
           primary_focus: c.primary_focus || null,

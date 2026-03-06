@@ -236,6 +236,13 @@ export async function searchTasks(
   return data as LinearTask[];
 }
 
+function mapCompetitorRows(rows: Record<string, unknown>[]): CompetitorRow[] {
+  return rows.map(r => {
+    const { added_date, ...rest } = r as Record<string, unknown> & { added_date?: string };
+    return { ...rest, date: added_date ?? undefined } as unknown as CompetitorRow;
+  });
+}
+
 async function fetchCompetitorRows(userId: string): Promise<CompetitorRow[]> {
   const { data, error } = await insforge.database
     .from(COMP_TABLE)
@@ -244,7 +251,7 @@ async function fetchCompetitorRows(userId: string): Promise<CompetitorRow[]> {
     .order('sort_order', { ascending: true });
 
   if (!error && data && data.length > 0) {
-    return data as CompetitorRow[];
+    return mapCompetitorRows(data);
   }
 
   // Fallback to defaults
@@ -257,5 +264,5 @@ async function fetchCompetitorRows(userId: string): Promise<CompetitorRow[]> {
   if (fbError || !fallback || fallback.length === 0) {
     throw new Error(`DB fetch failed [competitors]: ${fbError?.message ?? 'no data'}`);
   }
-  return fallback as CompetitorRow[];
+  return mapCompetitorRows(fallback);
 }

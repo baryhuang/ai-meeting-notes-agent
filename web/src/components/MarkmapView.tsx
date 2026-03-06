@@ -138,7 +138,7 @@ export function TimelineBar({ allDates, dateIndex, setDateIndex }: TimelineBarPr
     return () => window.removeEventListener('keydown', onKey);
   }, [allDates.length, setDateIndex]);
 
-  if (allDates.length <= 1) return null;
+  if (allDates.length === 0) return null;
 
   return (
     <div className="timeline-bar">

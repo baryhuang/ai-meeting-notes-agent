@@ -54,6 +54,7 @@ export interface CompetitorRow {
   best_owner?: string;
   subcategory?: string;
   threat: 'high' | 'medium' | 'low';
+  date?: string;
   website?: string;
   category?: string;
   primary_focus?: string;

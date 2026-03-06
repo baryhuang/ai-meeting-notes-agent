@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import type { LandscapeData, CompetitorRow } from '../types';
+import { parseDateOrdinal, TimelineBar } from './MarkmapView';
 
 interface CompetitorViewProps {
   data: LandscapeData;
@@ -213,7 +214,37 @@ export function CompetitorView({ data }: CompetitorViewProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const sections = useMemo(() => groupBySection(data.competitors), [data.competitors]);
+  // Helper: get date string from competitor (handles both 'date' and 'added_date' DB column)
+  const getDate = useCallback((c: CompetitorRow): string => {
+    if (c.date) return c.date;
+    const raw = c as unknown as Record<string, unknown>;
+    return (raw['added_date'] as string) || '';
+  }, []);
+
+  // Collect unique dates from competitors
+  const allDates = useMemo(() => {
+    const dateSet = new Set<number>();
+    for (const c of data.competitors) {
+      const ord = parseDateOrdinal(getDate(c));
+      if (ord !== null) dateSet.add(ord);
+    }
+    return Array.from(dateSet).sort((a, b) => a - b);
+  }, [data.competitors, getDate]);
+
+  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+
+  // Filter competitors by date cutoff
+  const filtered = useMemo(() => {
+    if (allDates.length <= 1) return data.competitors;
+    const cutoff = allDates[dateIndex] ?? Infinity;
+    return data.competitors.filter(c => {
+      const ord = parseDateOrdinal(getDate(c));
+      if (ord === null) return true;
+      return ord <= cutoff;
+    });
+  }, [data.competitors, allDates, dateIndex, getDate]);
+
+  const sections = useMemo(() => groupBySection(filtered), [filtered]);
 
   const showTooltip = useCallback((row: CompetitorRow, e: React.MouseEvent) => {
     clearTimeout(hideTimer.current);
@@ -228,15 +259,15 @@ export function CompetitorView({ data }: CompetitorViewProps) {
   const { meta } = data;
 
   return (
-    <div className="d3-wrap" style={{ display: 'block' }}>
-      <div className="landscape-wrap">
+    <div className="competitor-view">
+      <div className="competitor-scroll">
         <div className="landscape-header">
           <h2>{meta.title}</h2>
           <p>{meta.subtitle}{meta.last_update ? ` · Updated ${meta.last_update}` : ''}</p>
         </div>
 
         <div className="landscape-toolbar">
-          <span className="landscape-count">{data.competitors.length} companies</span>
+          <span className="landscape-count">{filtered.length} companies{allDates.length > 1 ? ` (of ${data.competitors.length})` : ''}</span>
           <div className="view-toggle">
             <button className={view === 'map' ? 'active' : ''} onClick={() => setView('map')}>Map</button>
             <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>Table</button>
@@ -246,20 +277,12 @@ export function CompetitorView({ data }: CompetitorViewProps) {
         {view === 'map' ? (
           <MapView sections={sections} onHover={showTooltip} onLeave={hideTooltip} />
         ) : (
-          <TableView competitors={data.competitors} onHover={showTooltip} onLeave={hideTooltip} />
+          <TableView competitors={filtered} onHover={showTooltip} onLeave={hideTooltip} />
         )}
 
-        <div className="insight-row">
-          <div className="insight-card position">
-            <div className="card-label">Our Position</div>
-            <div className="card-text">{meta.our_position}</div>
-          </div>
-          <div className="insight-card whitespace">
-            <div className="card-label">White Space</div>
-            <div className="card-text">{meta.white_space}</div>
-          </div>
-        </div>
       </div>
+
+      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
 
       {tooltip && <CompanyTooltip {...tooltip} />}
     </div>
