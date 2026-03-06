@@ -13,15 +13,15 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
   let desc = '8 dimensions + competitive evolution';
 
   if (currentView === 'overview') {
-    title = 'CareMojo Full Decision Map';
-    desc = '8 dimensions + competitive evolution \u00b7 zoom & drag to explore';
+    title = 'Full Decision Map';
+    desc = 'All 8 dimensions + competitive landscape \u00b7 zoom & drag to explore';
   } else if (currentView === 'd3' && dimensions[currentDimIndex]) {
     const dim = dimensions[currentDimIndex];
     title = dim.title;
     desc = dim.desc;
   } else if (currentView === 'competitor') {
-    title = 'Competitor Evolution';
-    desc = 'Competitive landscape evolving with scope changes';
+    title = 'Competitive Landscape';
+    desc = 'How the competitive field shifts as your scope expands';
   } else if (currentView === 'executive-report') {
     title = 'Executive Report';
     desc = 'Vision & Roadmap Evolution \u00b7 Feb 23 \u2013 Mar 5, 2026';
@@ -30,9 +30,9 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
   const showButtons = currentView === 'overview' || currentView === 'd3';
 
   const levelButtons = [
-    { label: 'L2', value: 2 },
-    { label: 'L3', value: 3 },
-    { label: 'L4', value: 4 },
+    { label: 'Summary', value: 2 },
+    { label: 'Detail', value: 3 },
+    { label: 'Deep Dive', value: 4 },
     { label: 'All', value: -1 },
   ];
 
@@ -54,7 +54,7 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
             </button>
           ))}
           <button className="btn" onClick={() => onExpandLevel(0)}>
-            Fit
+            Fit View
           </button>
         </div>
       )}

@@ -34,7 +34,7 @@ function AuthenticatedApp() {
   }, []);
 
   if (loading) {
-    return <div className="loading-screen">Loading Decision Atlas...</div>;
+    return <div className="loading-screen">Loading your Decision Atlas...</div>;
   }
 
   if (error) {
@@ -89,8 +89,8 @@ function AuthenticatedApp() {
             <>
               {dimensions[currentDimIndex].id === 'build' && (
                 <div className="view-tabs">
-                  <button className={`tab-btn${buildTab === 'tree' ? ' active' : ''}`} onClick={() => setBuildTab('tree')}>Tree View</button>
-                  <button className={`tab-btn${buildTab === 'gantt' ? ' active' : ''}`} onClick={() => setBuildTab('gantt')}>Gantt Timeline</button>
+                  <button className={`tab-btn${buildTab === 'tree' ? ' active' : ''}`} onClick={() => setBuildTab('tree')}>Decision Tree</button>
+                  <button className={`tab-btn${buildTab === 'gantt' ? ' active' : ''}`} onClick={() => setBuildTab('gantt')}>Timeline</button>
                 </div>
               )}
               {buildTab === 'gantt' && dimensions[currentDimIndex].id === 'build'
@@ -123,7 +123,7 @@ export default function App() {
       <SignedOut>
         <div className="login-screen">
           <h1>Decision Atlas</h1>
-          <p>Sign in to access your atlas data</p>
+          <p>Sign in to explore your strategic decisions</p>
           <SignInButton />
         </div>
       </SignedOut>

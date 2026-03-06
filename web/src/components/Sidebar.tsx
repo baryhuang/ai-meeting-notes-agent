@@ -31,11 +31,11 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
           className={`nav-item${currentView === 'overview' ? ' active' : ''}`}
           onClick={() => handleClick('overview')}
         >
-          <span className="icon">{'\uD83D\uDDFA\uFE0F'}</span>Mindmap
+          <span className="icon">{'\uD83D\uDDFA\uFE0F'}</span>Full Map
         </div>
 
         <div className="nav-divider" />
-        <div className="nav-section">Dimensions (D3 Tree)</div>
+        <div className="nav-section">Decision Dimensions</div>
         {dimensions.map((dim, i) => (
           <div
             key={dim.id}
@@ -54,7 +54,7 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
           className={`nav-item${currentView === 'competitor' ? ' active' : ''}`}
           onClick={() => handleClick('competitor')}
         >
-          <span className="icon">{'\u2694\uFE0F'}</span>Competitor Evolution
+          <span className="icon">{'\u2694\uFE0F'}</span>Competitive Landscape
         </div>
 
         <div className="nav-divider" />
