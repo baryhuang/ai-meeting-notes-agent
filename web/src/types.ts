@@ -83,4 +83,23 @@ export interface LandscapeData {
   competitors: CompetitorRow[];
 }
 
-export type ViewType = 'overview' | 'd3' | 'competitor';
+export interface LinearTask {
+  ID: string;
+  Title: string;
+  Description: string;
+  Status: string;
+  Priority: string;
+  Project: string;
+  Assignee: string;
+  Labels: string;
+  Created: string;
+  Updated: string;
+  'Due Date': string;
+  'Parent issue': string;
+  'Related to': string;
+  'Blocked by': string;
+  'Duplicate of': string;
+  similarity?: number;
+}
+
+export type ViewType = 'overview' | 'd3' | 'competitor' | 'tasks';

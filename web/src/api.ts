@@ -1,4 +1,4 @@
-import type { DimensionMeta, TreeNode, CompetitorData, LandscapeData, LandscapeMeta, CompetitorRow } from './types';
+import type { DimensionMeta, TreeNode, CompetitorData, LandscapeData, LandscapeMeta, CompetitorRow, LinearTask } from './types';
 import { insforge } from './insforge';
 import { assembleTree } from './assembleTree';
 
@@ -207,6 +207,33 @@ export async function fetchLandscapeData(userId: string): Promise<LandscapeData>
     fetchCompetitorRows(userId),
   ]);
   return { meta, competitors };
+}
+
+// ── Task search ───────────────────────────────────────────────────
+
+export async function searchTasks(
+  query: string,
+  filters?: { status?: string; priority?: string; project?: string; excludeStatuses?: string[]; limit?: number },
+): Promise<LinearTask[]> {
+  // 1. Get embedding for query
+  const embResp = await insforge.ai.embeddings.create({
+    model: 'openai/text-embedding-3-small',
+    input: query,
+  });
+  const embedding = embResp.data[0].embedding as number[];
+
+  // 2. Call Postgres function via SDK rpc
+  const { data, error } = await insforge.database.rpc('search_tasks', {
+    query_embedding: `[${embedding.join(',')}]`,
+    filter_status: filters?.status ?? null,
+    filter_priority: filters?.priority ?? null,
+    filter_project: filters?.project ?? null,
+    exclude_statuses: filters?.excludeStatuses ?? null,
+    result_limit: filters?.limit ?? 20,
+  });
+
+  if (error) throw new Error(`Search failed: ${error.message}`);
+  return data as LinearTask[];
 }
 
 async function fetchCompetitorRows(userId: string): Promise<CompetitorRow[]> {

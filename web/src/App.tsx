@@ -6,6 +6,7 @@ import { TopBar } from './components/TopBar';
 import { MarkmapDimensionView } from './components/MarkmapView';
 import { OverviewView } from './components/OverviewView';
 import { CompetitorView } from './components/CompetitorView';
+import { TaskSearchView } from './components/TaskSearchView';
 import { SwimGanttView } from './components/SwimGanttView';
 import type { ViewType } from './types';
 
@@ -102,6 +103,10 @@ function AuthenticatedApp() {
 
           {currentView === 'competitor' && landscapeData && (
             <CompetitorView data={landscapeData} />
+          )}
+
+          {currentView === 'tasks' && (
+            <TaskSearchView />
           )}
 
         </div>

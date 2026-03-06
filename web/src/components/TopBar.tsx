@@ -22,6 +22,9 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
   } else if (currentView === 'competitor') {
     title = '竞争格局';
     desc = '竞争对手全景分析';
+  } else if (currentView === 'tasks') {
+    title = 'Task Search';
+    desc = 'Semantic search across Linear tasks';
   }
 
   const showButtons = currentView === 'd3';

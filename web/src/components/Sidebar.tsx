@@ -52,6 +52,13 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
         >
           <span className="icon">{'\u2694\uFE0F'}</span>竞争格局
         </div>
+
+        <div
+          className={`nav-item${currentView === 'tasks' ? ' active' : ''}`}
+          onClick={() => handleClick('tasks')}
+        >
+          <span className="icon">{'\uD83D\uDD0D'}</span>Task Search
+        </div>
       </div>
 
       <div className="sidebar-legend">
