@@ -3,7 +3,7 @@ import { SignInButton, SignedIn, SignedOut, UserButton, useUser } from '@insforg
 import { useAtlasData } from './hooks/useAtlasData';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
-import { MarkmapView, MarkmapDimensionView } from './components/MarkmapView';
+import { MarkmapDimensionView } from './components/MarkmapView';
 import { CompetitorView } from './components/CompetitorView';
 import { SwimGanttView } from './components/SwimGanttView';
 import type { ViewType } from './types';
@@ -11,8 +11,8 @@ import type { ViewType } from './types';
 function AuthenticatedApp() {
   const { user } = useUser();
   const userId = user!.id;
-  const { dimensions, dimensionsData, competitorData, landscapeData, progressData, loading, error } = useAtlasData(userId);
-  const [currentView, setCurrentView] = useState<ViewType>('overview');
+  const { dimensions, dimensionsData, landscapeData, progressData, loading, error } = useAtlasData(userId);
+  const [currentView, setCurrentView] = useState<ViewType>('d3');
   const [currentDimIndex, setCurrentDimIndex] = useState(0);
   const [expandLevel, setExpandLevel] = useState(-1);
   const [fitRequest, setFitRequest] = useState(false);
@@ -71,16 +71,6 @@ function AuthenticatedApp() {
               expandLevel={expandLevel}
               onExpandLevel={handleExpandLevel}
             />
-
-          {currentView === 'overview' && (
-            <MarkmapView
-              dimensions={dimensions}
-              dimensionsData={dimensionsData}
-              competitorData={competitorData}
-              expandLevel={expandLevel}
-              onFitRequest={fitRequest}
-            />
-          )}
 
           {currentView === 'd3' && dimensions[currentDimIndex] && dimensionsData[dimensions[currentDimIndex].id] && (
             <>

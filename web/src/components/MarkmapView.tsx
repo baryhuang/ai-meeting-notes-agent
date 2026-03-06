@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { Markmap, deriveOptions } from 'markmap-view';
-import type { DimensionMeta, TreeNode, CompetitorData } from '../types';
+import type { TreeNode } from '../types';
 
 const statusColors: Record<string, string> = {
   origin: '#3a6da0', abandoned: '#c94040', chosen: '#3a7d44',
@@ -73,14 +73,6 @@ function collectDates(node: TreeNode): number[] {
     (n.children || []).forEach(walk);
   }
   walk(node);
-  return Array.from(dates).sort((a, b) => a - b);
-}
-
-function collectDatesFromMultiple(trees: TreeNode[]): number[] {
-  const dates: Set<number> = new Set();
-  for (const tree of trees) {
-    for (const d of collectDates(tree)) dates.add(d);
-  }
   return Array.from(dates).sort((a, b) => a - b);
 }
 
@@ -267,80 +259,6 @@ function useMarkmapTimeline(
   }, [onFitRequest]);
 
   return { dateIndex, setDateIndex };
-}
-
-/* ── Overview markmap ──────────────────────────── */
-
-function buildOverviewRoot(
-  dimensionsMeta: DimensionMeta[],
-  dataMap: Record<string, TreeNode>,
-  compData: CompetitorData | null,
-): INode {
-  const dimChildren = dimensionsMeta.map(dim => {
-    const treeData = dataMap[dim.id];
-    if (!treeData) return { content: `${dim.icon} ${dim.title}`, children: [] };
-    const children = (treeData.children || []).map(c => jsonToINode(c, 2));
-    return {
-      content: `${dim.icon} <strong>${dim.title}</strong> <span style="font-size:0.8em;color:#8a9e8c">\u2014 ${dim.desc}</span>`,
-      children,
-    };
-  });
-
-  if (compData?.stages) {
-    const compChildren = compData.stages.map(stage => ({
-      content: `<strong>${stage.name}</strong> <span style="font-size:0.8em;color:#8a9e8c">${stage.date} \u00b7 ${stage.total}\u5BB6</span>`,
-      children: [
-        { content: `<span style="color:#3a6da0">Position:</span> ${stage.our_position}`, children: [] },
-        { content: `<span style="color:#3a7d44">White space:</span> ${stage.white_space}`, children: [] },
-      ],
-    }));
-    dimChildren.push({
-      content: `\u2694\uFE0F <strong>Competitor Evolution</strong> <span style="font-size:0.8em;color:#8a9e8c">\u2014 10 to 80+</span>`,
-      children: compChildren,
-    });
-  }
-
-  return {
-    content: '\u2764\uFE0F <strong>CareMojo \u00b7 Decision Atlas</strong>',
-    children: dimChildren,
-  };
-}
-
-interface MarkmapViewProps {
-  dimensions: DimensionMeta[];
-  dimensionsData: Record<string, TreeNode>;
-  competitorData: CompetitorData | null;
-  expandLevel: number;
-  onFitRequest: boolean;
-}
-
-const OVERVIEW_OPTS = { spacingH: 80, spacingV: 6, maxW: 280 };
-
-export function MarkmapView({ dimensions, dimensionsData, competitorData, expandLevel, onFitRequest }: MarkmapViewProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
-
-  const allDates = useMemo(() => {
-    const trees = Object.values(dimensionsData);
-    return trees.length > 0 ? collectDatesFromMultiple(trees) : [];
-  }, [dimensionsData]);
-
-  const fullRoot = useMemo(() => {
-    if (dimensions.length === 0 || Object.keys(dimensionsData).length === 0) return null;
-    return buildOverviewRoot(dimensions, dimensionsData, competitorData);
-  }, [dimensions, dimensionsData, competitorData]);
-
-  const { dateIndex, setDateIndex } = useMarkmapTimeline(
-    svgRef, fullRoot, allDates, expandLevel, onFitRequest, OVERVIEW_OPTS,
-  );
-
-  return (
-    <div className="dim-view">
-      <div className="map-wrap">
-        <svg ref={svgRef} style={{ width: '100%', height: '100%' }} />
-      </div>
-      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
-    </div>
-  );
 }
 
 /* ── Dimension markmap with timeline ───────────── */

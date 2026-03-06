@@ -12,10 +12,7 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
   let title = 'CareMojo Decision Atlas';
   let desc = '8 dimensions + competitive evolution';
 
-  if (currentView === 'overview') {
-    title = 'Full Decision Map';
-    desc = 'All 8 dimensions + competitive landscape \u00b7 zoom & drag to explore';
-  } else if (currentView === 'd3' && dimensions[currentDimIndex]) {
+  if (currentView === 'd3' && dimensions[currentDimIndex]) {
     const dim = dimensions[currentDimIndex];
     title = dim.title;
     desc = dim.desc;
@@ -24,7 +21,7 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
     desc = '竞争对手全景分析';
   }
 
-  const showButtons = currentView === 'overview' || currentView === 'd3';
+  const showButtons = currentView === 'd3';
 
   const levelButtons = [
     { label: 'Summary', value: 2 },
