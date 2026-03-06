@@ -83,4 +83,4 @@ export interface LandscapeData {
   competitors: CompetitorRow[];
 }
 
-export type ViewType = 'overview' | 'd3' | 'competitor' | 'executive-report';
+export type ViewType = 'overview' | 'd3' | 'competitor';

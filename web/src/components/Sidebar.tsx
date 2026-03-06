@@ -48,21 +48,11 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
           </div>
         ))}
 
-        <div className="nav-divider" />
-        <div className="nav-section">Competitive</div>
         <div
           className={`nav-item${currentView === 'competitor' ? ' active' : ''}`}
           onClick={() => handleClick('competitor')}
         >
-          <span className="icon">{'\u2694\uFE0F'}</span>Competitive Landscape
-        </div>
-
-        <div className="nav-divider" />
-        <div
-          className={`nav-item${currentView === 'executive-report' ? ' active' : ''}`}
-          onClick={() => handleClick('executive-report')}
-        >
-          <span className="icon">{'\uD83D\uDCCA'}</span>Executive Report
+          <span className="icon">{'\u2694\uFE0F'}</span>竞争格局
         </div>
       </div>
 

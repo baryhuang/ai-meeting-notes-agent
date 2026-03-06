@@ -20,11 +20,8 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
     title = dim.title;
     desc = dim.desc;
   } else if (currentView === 'competitor') {
-    title = 'Competitive Landscape';
-    desc = 'How the competitive field shifts as your scope expands';
-  } else if (currentView === 'executive-report') {
-    title = 'Executive Report';
-    desc = 'Vision & Roadmap Evolution \u00b7 Feb 23 \u2013 Mar 5, 2026';
+    title = '竞争格局';
+    desc = '竞争对手全景分析';
   }
 
   const showButtons = currentView === 'overview' || currentView === 'd3';

@@ -5,7 +5,6 @@ import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { MarkmapView, MarkmapDimensionView } from './components/MarkmapView';
 import { CompetitorView } from './components/CompetitorView';
-import { ExecutiveReport } from './components/ExecutiveReport';
 import { SwimGanttView } from './components/SwimGanttView';
 import type { ViewType } from './types';
 
@@ -65,15 +64,13 @@ function AuthenticatedApp() {
           onClose={() => setSidebarOpen(false)}
         />
         <div className="main">
-          {currentView !== 'executive-report' && (
-            <TopBar
+          <TopBar
               currentView={currentView}
               currentDimIndex={currentDimIndex}
               dimensions={dimensions}
               expandLevel={expandLevel}
               onExpandLevel={handleExpandLevel}
             />
-          )}
 
           {currentView === 'overview' && (
             <MarkmapView
@@ -108,9 +105,6 @@ function AuthenticatedApp() {
             <CompetitorView data={landscapeData} />
           )}
 
-          {currentView === 'executive-report' && (
-            <ExecutiveReport />
-          )}
         </div>
       </div>
     </>
