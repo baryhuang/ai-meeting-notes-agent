@@ -848,6 +848,9 @@ body::before {
 }
 
 /* ── Gantt chart container ───────────────────── */
+.gantt-view {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
 .gantt-wrap {
   flex: 1; overflow: auto; padding: 24px;
   background:

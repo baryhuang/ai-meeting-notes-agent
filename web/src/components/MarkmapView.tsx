@@ -60,9 +60,13 @@ const MONTH_MAP: Record<string, number> = {
 
 export function parseDateOrdinal(dateStr: string): number | null {
   if (!dateStr) return null;
+  // "MMM DD" format (e.g. "Feb 23")
   const m = dateStr.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d+)/);
-  if (!m) return null;
-  return MONTH_MAP[m[1]] * 100 + parseInt(m[2], 10);
+  if (m) return MONTH_MAP[m[1]] * 100 + parseInt(m[2], 10);
+  // ISO "YYYY-MM-DD" format (e.g. "2026-02-23")
+  const iso = dateStr.match(/^\d{4}-(\d{2})-(\d{2})/);
+  if (iso) return parseInt(iso[1], 10) * 100 + parseInt(iso[2], 10);
+  return null;
 }
 
 export function collectDates(node: TreeNode): number[] {

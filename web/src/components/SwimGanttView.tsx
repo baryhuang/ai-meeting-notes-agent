@@ -1,6 +1,7 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import type { TreeNode } from '../types';
+import { collectDates, parseDateOrdinal, TimelineBar } from './MarkmapView';
 
 /* ── Status → color mapping (same as D3TreeView) ── */
 const statusColors: Record<string, string> = {
@@ -129,6 +130,20 @@ function buildLanes(root: TreeNode): SwimLane[] {
   });
 }
 
+/* ── Filter tree by date cutoff ── */
+function filterTreeByDate(node: TreeNode, cutoff: number): TreeNode {
+  const children = (node.children || [])
+    .map(c => filterTreeByDate(c, cutoff))
+    .filter(c => {
+      const ord = parseDateOrdinal(c.date || '');
+      // Keep if: no date, date <= cutoff, or has children that survived
+      if (ord === null) return true;
+      if (ord <= cutoff) return true;
+      return (c.children || []).length > 0;
+    });
+  return { ...node, children };
+}
+
 /* ── Component ── */
 interface SwimGanttViewProps {
   treeData: TreeNode;
@@ -138,12 +153,22 @@ export function SwimGanttView({ treeData }: SwimGanttViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, data: null });
 
+  // Timeline state
+  const allDates = useMemo(() => collectDates(treeData), [treeData]);
+  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+
+  const filteredTree = useMemo(() => {
+    if (allDates.length <= 1) return treeData;
+    const cutoff = allDates[dateIndex] ?? Infinity;
+    return filterTreeByDate(treeData, cutoff);
+  }, [treeData, allDates, dateIndex]);
+
   useEffect(() => {
     if (!containerRef.current) return;
     const el = containerRef.current;
     el.innerHTML = '';
 
-    const lanes = buildLanes(treeData);
+    const lanes = buildLanes(filteredTree);
 
     /* ── Dimensions ── */
     const labelW = 220;
@@ -324,41 +349,45 @@ export function SwimGanttView({ treeData }: SwimGanttViewProps) {
     svg.on('click', () => setTooltip(prev => ({ ...prev, visible: false })));
 
     return () => { el.innerHTML = ''; };
-  }, [treeData]);
+  }, [filteredTree]);
 
   return (
-    <div className="gantt-wrap">
-      <div ref={containerRef} />
-      <div
-        className={`tooltip${tooltip.visible ? ' visible' : ''}`}
-        style={{ left: tooltip.x, top: tooltip.y }}
-      >
-        {tooltip.data && (
-          <>
-            <h3>{tooltip.data.name}</h3>
-            {tooltip.data.owner && <div className="owner"><strong>Owner:</strong> {tooltip.data.owner}</div>}
-            {tooltip.data.supervisor && <div className="owner"><strong>Supervisor:</strong> {tooltip.data.supervisor}</div>}
-            {tooltip.data.date && <div className="date">{tooltip.data.date}</div>}
-            {tooltip.data.deadline && <div className="date"><strong>Deadline:</strong> {tooltip.data.deadline}</div>}
-            {tooltip.data.desc && <div className="desc">{tooltip.data.desc}</div>}
-            {tooltip.data.timeline && <div className="desc"><strong>Timeline:</strong> {tooltip.data.timeline}</div>}
-            {tooltip.data.quotes?.map((q, i) => (
-              <div key={i} className="quote">&ldquo;{q}&rdquo;</div>
-            ))}
-            {tooltip.data.feedback && (
-              <div className="feedback">{'\uD83D\uDCAC'} {tooltip.data.feedback}</div>
-            )}
-            {tooltip.data.structure && (
-              <div className="structure">
-                <strong>Pitch Structure:</strong><br />
-                {tooltip.data.structure.map((s, i) => (
-                  <span key={i}>{'\u2192'} {s}<br /></span>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+    <div className="gantt-view">
+      <div className="gantt-wrap">
+        <div ref={containerRef} />
+        <div
+          className={`tooltip${tooltip.visible ? ' visible' : ''}`}
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
+          {tooltip.data && (
+            <>
+              <h3>{tooltip.data.name}</h3>
+              {tooltip.data.owner && <div className="owner"><strong>Owner:</strong> {tooltip.data.owner}</div>}
+              {tooltip.data.supervisor && <div className="owner"><strong>Supervisor:</strong> {tooltip.data.supervisor}</div>}
+              {tooltip.data.date && <div className="date">{tooltip.data.date}</div>}
+              {tooltip.data.deadline && <div className="date"><strong>Deadline:</strong> {tooltip.data.deadline}</div>}
+              {tooltip.data.desc && <div className="desc">{tooltip.data.desc}</div>}
+              {tooltip.data.timeline && <div className="desc"><strong>Timeline:</strong> {tooltip.data.timeline}</div>}
+              {tooltip.data.quotes?.map((q, i) => (
+                <div key={i} className="quote">&ldquo;{q}&rdquo;</div>
+              ))}
+              {tooltip.data.feedback && (
+                <div className="feedback">{'\uD83D\uDCAC'} {tooltip.data.feedback}</div>
+              )}
+              {tooltip.data.structure && (
+                <div className="structure">
+                  <strong>Pitch Structure:</strong><br />
+                  {tooltip.data.structure.map((s, i) => (
+                    <span key={i}>{'\u2192'} {s}<br /></span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
+
+      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
     </div>
   );
 }
