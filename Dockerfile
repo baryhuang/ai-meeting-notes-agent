@@ -1,10 +1,10 @@
 # Stage 1: Build frontend
-FROM node:22-slim AS frontend
+FROM oven/bun:1 AS frontend
 WORKDIR /web
-COPY web/package.json web/package-lock.json ./
-RUN npm ci --legacy-peer-deps
+COPY web/package.json web/bun.lockb ./
+RUN bun install --frozen-lockfile
 COPY web/ .
-RUN npm run build
+RUN bun run build
 
 # Stage 2: Python app + built frontend
 FROM python:3.13-slim
