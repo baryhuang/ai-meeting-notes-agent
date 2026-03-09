@@ -1,124 +1,207 @@
-# OpenAgents Workspace + Claude Agent SDK Integration Research
+# OpenAgents Workspace + Claude Code Integration Research
 
-## Overview
+## 核心发现：Claude Code 通过 MCP 直连 OpenAgents Workspace
 
-This document explores how to use [OpenAgents](https://openagents.org) workspaces to run Claude as an agent via API, and whether the Claude Agent SDK can be integrated.
+你不需要写 wrapper。OpenAgents workspace 原生暴露 MCP endpoint，Claude Code 直接连上去就能作为 agent 参与协作。
 
 ---
 
-## OpenAgents Workspace — How It Works
+## 方案：连接到已运行的 Workspace Instance
 
-OpenAgents workspaces are persistent agent environments where multiple agents connect, communicate, and collaborate.
+### 前提
 
-### Setup
+你已经单独 launch 了一个 OpenAgents workspace instance（比如在远程服务器或本地）。
 
+### Step 1: Workspace 端确保 MCP 开启
+
+`network.yaml` 配置：
+```yaml
+network:
+  name: MyNetwork
+  mode: centralized
+  transports:
+    - type: http
+      config:
+        port: 8700
+        serve_mcp: true
+        serve_studio: true
+    - type: grpc
+      config:
+        port: 8600
+  mods:
+    - name: openagents.mods.workspace.messaging
+      enabled: true
+```
+
+启动：
 ```bash
 pip install -U openagents
-
-# Initialize a workspace
 openagents init ./my_network
-
-# Start the network
-openagents network start
-# Or with config:
-openagents network start config.yaml
+openagents network start ./my_network
 ```
 
-### Workspace Structure
+Workspace 会在以下端口运行：
+- **MCP endpoint**: `http://localhost:8700/mcp`
+- **Studio UI**: `http://localhost:8700/studio`
+- **gRPC**: `localhost:8600`
+- **Health check**: `http://localhost:8700/api/health`
 
-```
-my_network/
-├── agents/          # Agent Python/YAML configs
-├── tools/           # Custom tools (auto-discovered)
-├── events/          # AsyncAPI event definitions
-└── network.yaml     # Network configuration
-```
+### Step 2: Claude Code 连接到 Workspace
 
-### Core API — `WorkerAgent` + `self.workspace()`
+**CLI 方式（推荐）：**
+```bash
+# 本地 workspace
+claude mcp add --transport http openagents http://localhost:8700/mcp
 
-Agents subclass `WorkerAgent` and interact via the workspace API:
+# 远程 workspace
+claude mcp add --transport http openagents http://192.168.1.100:8700/mcp
 
-```python
-from openagents.agents.worker_agent import WorkerAgent, ChannelMessageContext
-
-class MyAgent(WorkerAgent):
-    default_agent_id = "my-agent"
-    default_channels = ["general"]
-
-    async def on_startup(self):
-        ws = self.workspace()
-        await ws.channel("general").post("I'm online!")
-
-    async def on_direct(self, msg):
-        ws = self.workspace()
-        await ws.agent(msg.sender_id).send("Got your message!")
-
-    async def on_channel_mention(self, context: ChannelMessageContext):
-        # Respond when @mentioned in a channel
-        await self.run_agent(context=context, instruction="Help the user")
-
-if __name__ == "__main__":
-    agent = MyAgent()
-    agent.start(network_host="localhost", network_port=8700, network_id="main")
+# 带认证的云端 workspace
+claude mcp add --transport http openagents https://my-network.example.com/mcp \
+  --header "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### Workspace API Methods
+**或手动配置 `~/.claude.json`：**
+```json
+{
+  "mcpServers": {
+    "openagents": {
+      "type": "http",
+      "url": "http://localhost:8700/mcp"
+    }
+  }
+}
+```
 
-| Method | Description |
-|--------|-------------|
-| `ws.agent(id).send(msg)` | Direct message to agent |
-| `ws.channel(name).post(msg)` | Post to channel |
-| `ws.channel(name).reply(event_id, msg)` | Reply to message |
-| `ws.channel(name).post_with_mention(text, id)` | Post with @mention |
-| `ws.channel(name).add_reaction(msg_id, emoji)` | React to message |
+**验证连接：**
+```bash
+claude mcp list
+# 应看到: openagents: http://localhost:8700/mcp (HTTP) - ✓ Connected
+```
+
+### Step 3: Claude Code 获得的 MCP Tools
+
+连接后，Claude Code 自动获得以下 workspace 工具：
+
+| Tool | 用途 |
+|------|------|
+| `send_channel_message` | 发消息到频道 |
+| `reply_channel_message` | 回复消息（创建线程） |
+| `send_direct_message` | 私聊其他 agent |
+| `retrieve_channel_messages` | 获取频道历史消息 |
+| `list_channels` | 查看可用频道 |
+| `react_to_message` | 对消息加 emoji 反应 |
 
 ---
 
-## Using Claude as an LLM Provider in OpenAgents
+## 架构图
 
-OpenAgents has **native Claude support** via `AgentConfig`:
+```
+┌─────────────────────────────────────────────────────┐
+│           OpenAgents Workspace Instance              │
+│                  (已独立运行)                         │
+│                                                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
+│  │ Agent A  │  │ Agent B  │  │  Python Agents   │   │
+│  │ (Python) │  │ (YAML)   │  │  (WorkerAgent)   │   │
+│  └────┬─────┘  └────┬─────┘  └───────┬──────────┘   │
+│       │              │                │              │
+│       └──────────┬───┘────────────────┘              │
+│                  │                                    │
+│           ┌──────┴──────┐                            │
+│           │  Event Bus  │                            │
+│           └──────┬──────┘                            │
+│                  │                                    │
+│           ┌──────┴──────┐                            │
+│           │ MCP Endpoint│  ← http://host:8700/mcp   │
+│           └──────┬──────┘                            │
+└──────────────────┼───────────────────────────────────┘
+                   │
+                   │  MCP Protocol (HTTP)
+                   │
+          ┌────────┴────────┐
+          │   Claude Code   │
+          │                 │
+          │  可用工具:       │
+          │  - send_channel │
+          │  - send_direct  │
+          │  - list_channels│
+          │  - retrieve_msgs│
+          │  - react        │
+          └─────────────────┘
+```
+
+---
+
+## 使用场景
+
+### 1. Claude Code 作为协作 Agent
+
+Claude Code 连上 workspace 后，可以：
+- 在频道里发消息、回复其他 agent
+- 收到 @mention 后自动响应
+- 读取频道历史来获取上下文
+- 与其他 Python agent 协作完成任务
+
+### 2. 多个 Claude Code 实例协作
+
+两个 Claude Code 连同一个 workspace，做 pair programming：
+```bash
+# Terminal 1
+claude mcp add --transport http openagents http://localhost:8700/mcp
+# Claude Code instance 1 负责写代码
+
+# Terminal 2 (另一个 Claude Code)
+claude mcp add --transport http openagents http://localhost:8700/mcp
+# Claude Code instance 2 负责 code review
+```
+
+### 3. Claude Code + 自定义 Python Agent
 
 ```python
+# 在 workspace 里运行一个数据处理 agent
 from openagents.agents.worker_agent import WorkerAgent, ChannelMessageContext
 from openagents.models.agent_config import create_claude_config
 
-class ClaudeAssistant(WorkerAgent):
-    default_agent_id = "claude-assistant"
-    default_channels = ["general"]
+class TranscriptProcessor(WorkerAgent):
+    default_agent_id = "transcript-processor"
+    default_channels = ["dev"]
 
     def __init__(self):
-        claude_config = create_claude_config(
+        config = create_claude_config(
             model_name="claude-sonnet-4-6",
-            instruction="You are a helpful meeting notes assistant",
-            api_key="your-anthropic-api-key"
+            instruction="Process meeting transcripts and extract action items",
+            api_key="your-key"
         )
-        super().__init__(agent_config=claude_config)
+        super().__init__(agent_config=config)
 
     async def on_channel_mention(self, context: ChannelMessageContext):
         await self.run_agent(
             context=context,
-            instruction="Analyze the meeting notes and provide insights"
+            instruction="Analyze the transcript"
         )
 
 if __name__ == "__main__":
-    agent = ClaudeAssistant()
+    agent = TranscriptProcessor()
     agent.start(network_host="localhost", network_port=8700)
 ```
 
-This uses the **Anthropic API directly** (chat completions) — not the Claude Agent SDK's agentic capabilities (file editing, shell commands, etc.).
+然后 Claude Code 可以通过 MCP 给这个 agent 发消息，让它处理转录文件。
 
 ---
 
-## Bridging Claude Agent SDK into OpenAgents
+## 用 Claude Agent SDK 编程式连接
 
-To get **full Claude Code capabilities** (file ops, shell, code editing) inside an OpenAgents workspace, you can wrap the Claude Agent SDK:
+如果你想用代码（而非 CLI）把 Claude 作为 agent 连到 workspace，可以用 Claude Agent SDK + OpenAgents Python client：
 
 ```python
+import asyncio
 from openagents.agents.worker_agent import WorkerAgent, ChannelMessageContext
 from claude_agent_sdk import ClaudeSDKClient
 
-class ClaudeCodeAgent(WorkerAgent):
-    default_agent_id = "claude-code-agent"
+class ClaudeCodeWorkspaceAgent(WorkerAgent):
+    """把 Claude Agent SDK 的完整能力接入 OpenAgents workspace"""
+    default_agent_id = "claude-code-bot"
     default_channels = ["dev"]
 
     def __init__(self):
@@ -129,124 +212,44 @@ class ClaudeCodeAgent(WorkerAgent):
         message = context.incoming_event.payload.get('content', {}).get('text', '')
         ws = self.workspace()
 
-        # Run Claude Code agent with full tool access
+        # 用 Claude Agent SDK 执行完整的 agentic 任务
         session = await self.claude.create_session(
             prompt=message,
             allowed_tools=["read", "edit", "bash", "glob", "grep"],
             working_directory="/path/to/project"
         )
-
         result = await session.run()
 
         await ws.channel(context.channel).reply(
             context.incoming_event.id,
-            f"Result:\n```\n{result.text}\n```"
+            f"Done:\n```\n{result.text}\n```"
         )
 
 if __name__ == "__main__":
-    agent = ClaudeCodeAgent()
+    agent = ClaudeCodeWorkspaceAgent()
     agent.start(network_host="localhost", network_port=8700)
 ```
 
 ---
 
-## Architecture Options
+## 总结：你的最佳路径
 
-### Option 1: Claude as LLM Provider (Simple)
+| 方式 | 做法 | 适合 |
+|------|------|------|
+| **MCP 直连**（推荐） | `claude mcp add openagents http://host:8700/mcp` | 最快上手，Claude Code 直接当 agent 用 |
+| **Python Agent + Claude API** | `create_claude_config()` + `WorkerAgent` | 在 workspace 里跑 Claude 驱动的自定义 agent |
+| **Python Agent + Claude Agent SDK** | `ClaudeSDKClient` + `WorkerAgent` | 需要文件操作、命令执行等完整 Code 能力 |
 
-```
-User → OpenAgents Workspace → Claude API (chat only)
-```
-
-- Uses `create_claude_config()` — built-in, zero extra code
-- No file/shell access — pure conversation
-- Good for: Q&A, summarization, analysis
-
-### Option 2: Claude Agent SDK Wrapper (Full Power)
-
-```
-User → OpenAgents Workspace → WorkerAgent → Claude Agent SDK → Claude Code CLI
-                                                                  ├── File ops
-                                                                  ├── Shell commands
-                                                                  └── Code editing
-```
-
-- Wraps `ClaudeSDKClient` inside a `WorkerAgent`
-- Full Claude Code capabilities (read/write files, run commands)
-- Good for: Code review, automated refactoring, CI/CD agents
-
-### Option 3: MCP Bridge (Protocol-Native)
-
-```
-User → OpenAgents Workspace → MCP Server → Claude Desktop / Claude Code
-```
-
-- OpenAgents has native MCP support
-- Claude Code can connect to MCP servers
-- Bidirectional: Claude can call OpenAgents tools, OpenAgents can call Claude
-
----
-
-## Recommendation for This Project
-
-For the **AI Meeting Notes Agent**, the most practical integration would be:
-
-1. **Option 1** for a quick start — Use OpenAgents workspace with Claude as LLM provider to create a collaborative meeting analysis agent that other agents can interact with
-
-2. **Option 2** for advanced use — Wrap Claude Agent SDK to let the agent autonomously process transcripts, update atlas data, and commit changes
-
-### Example: Meeting Notes Agent in OpenAgents Workspace
-
-```python
-from openagents.agents.worker_agent import WorkerAgent, ChannelMessageContext
-from openagents.models.agent_config import create_claude_config
-
-class MeetingNotesAgent(WorkerAgent):
-    default_agent_id = "meeting-notes-ai"
-    default_channels = ["meetings", "general"]
-
-    def __init__(self):
-        config = create_claude_config(
-            model_name="claude-sonnet-4-6",
-            instruction="""You are a meeting notes analyst. You:
-            - Summarize key decisions and action items
-            - Identify speakers and their contributions
-            - Track follow-ups from previous meetings
-            - Update the Decision Atlas with new insights""",
-            api_key="your-anthropic-api-key"
-        )
-        super().__init__(agent_config=config)
-
-    async def on_channel_post(self, context: ChannelMessageContext):
-        message = context.incoming_event.payload.get('content', {}).get('text', '')
-
-        # Auto-process messages that look like meeting transcripts
-        if len(message) > 500 or 'transcript' in message.lower():
-            await self.run_agent(
-                context=context,
-                instruction="Analyze this meeting transcript. Extract decisions, action items, and key insights."
-            )
-
-    async def on_direct(self, msg):
-        ws = self.workspace()
-        await self.run_agent(
-            context=msg,
-            instruction="Help with meeting notes analysis"
-        )
-
-if __name__ == "__main__":
-    agent = MeetingNotesAgent()
-    agent.start(network_host="localhost", network_port=8700)
-```
+**你的情况**：既然你会单独 launch workspace instance，最直接的方式就是 **MCP 直连** — 一行命令就把 Claude Code 接入你的 workspace。
 
 ---
 
 ## Sources
 
+- [Connecting Claude Code to OpenAgents Networks](https://openagents.org/blog/posts/2026-01-15-connecting-claude-code-to-openagents-networks)
 - [OpenAgents Overview](https://openagents.org/docs/en/getting-started/overview)
 - [Python-based Agents Tutorial](https://openagents.org/docs/en/tutorials/python-based-agents)
 - [LLM-based Agents Guide](https://openagents.org/docs/python-interface/work-with-llm-based-agents)
-- [CLI Overview](https://openagents.org/docs/en/cli/cli-overview)
+- [Deploy on Zeabur](https://openagents.org/blog/posts/2026-01-14-tutorial-deploying-openagents-network-on-zeabur)
 - [OpenAgents GitHub](https://github.com/openagents-org/openagents)
 - [Claude Agent SDK Docs](https://platform.claude.com/docs/en/agent-sdk/overview)
-- [OpenAgents vs Other Frameworks (2026)](https://openagents.org/blog/posts/2026-02-23-open-source-ai-agent-frameworks-compared)
