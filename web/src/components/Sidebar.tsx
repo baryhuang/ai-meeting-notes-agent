@@ -66,6 +66,12 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
         >
           <span className="icon">{'\uD83C\uDFE0'}</span>Overview
         </div>
+        <div
+          className={`nav-item${currentView === 'vem' ? ' active' : ''}`}
+          onClick={() => handleClick('vem')}
+        >
+          <span className="icon">{'\uD83D\uDDFA\uFE0F'}</span>Vision to Execution
+        </div>
 
         {grouped.map(({ group, label, items }) => (
           <div key={group}>

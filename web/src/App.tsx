@@ -9,6 +9,7 @@ import { CompetitorView } from './components/CompetitorView';
 import { TaskSearchView } from './components/TaskSearchView';
 import { SwimGanttView } from './components/SwimGanttView';
 import { AppointmentsView } from './components/AppointmentsView';
+import { VEMDocumentView } from './components/VEMDocumentView';
 import type { ViewType } from './types';
 
 function AuthenticatedApp() {
@@ -82,6 +83,10 @@ function AuthenticatedApp() {
               dimensionsData={dimensionsData}
               onSwitch={handleSwitch}
             />
+          )}
+
+          {currentView === 'vem' && dimensionsData['vision_execution_map'] && (
+            <VEMDocumentView treeData={dimensionsData['vision_execution_map']} />
           )}
 
           {currentView === 'd3' && dimensions[currentDimIndex] && dimensionsData[dimensions[currentDimIndex].id] && (
