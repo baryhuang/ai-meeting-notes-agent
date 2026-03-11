@@ -16,6 +16,7 @@ Usage:
 """
 
 import asyncio
+import base64
 import os
 import sys
 import io
@@ -50,13 +51,23 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 INLINE_CHAR_LIMIT = 2000
 
 
-def _get_openai_client():
-    """Get OpenAI-compatible client if API key is configured."""
+def _get_digitalocean_ai_client():
+    """Get DigitalOcean AI (OpenAI-compatible) client if API key is configured."""
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         return None
     from openai import OpenAI
     base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+
+def _get_openrouter_ai_client():
+    """Get OpenRouter client for vision/OCR tasks."""
+    api_key = os.getenv('OPENROUTER_API_KEY')
+    if not api_key:
+        return None
+    from openai import OpenAI
+    base_url = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
@@ -182,7 +193,7 @@ def _save_file(s3_client, s3_bucket: str | None, prefix: str, filename: str, dat
 
 def _summarize(transcript_text: str) -> str | None:
     """Summarize a transcript using OpenAI-compatible API. Returns None if unavailable."""
-    client = _get_openai_client()
+    client = _get_digitalocean_ai_client()
     if not client:
         return None
 
@@ -234,7 +245,7 @@ def main():
     s3_client, s3_bucket = _get_s3_client()
     bot_name = os.getenv('BOT_NAME', 'transcribe-bot')
 
-    ai_enabled = bool(_get_openai_client())
+    ai_enabled = bool(_get_digitalocean_ai_client())
     if ai_enabled:
         logger.info("AI enabled (OPENAI_API_KEY configured) — summarization active")
     else:
@@ -253,6 +264,15 @@ def main():
     bot_state.s3_bucket = s3_bucket or ""
 
     logger.info(f"Local storage: {DATA_DIR.resolve()}/{bot_name}/")
+
+    # ── Text buffering (1.5s debounce per user) ────────────────
+    _text_buffers: dict[int, list[str]] = {}       # user_id → list of text chunks
+    _text_timers: dict[int, asyncio.TimerHandle] = {}  # user_id → pending timer
+
+    # ── Photo / media-group buffering (2s debounce) ───────────
+    _photo_buffers: dict[str, list] = {}           # media_group_id → list of (file_id, file_unique_id)
+    _photo_meta: dict[str, dict] = {}              # media_group_id → {msg, user, caption}
+    _photo_timers: dict[str, asyncio.TimerHandle] = {}
 
     async def start(update: Update, context):
         features = [
@@ -416,7 +436,7 @@ def main():
         await _transcribe_and_reply(msg, file, ext, file_unique_id)
 
     async def handle_text(update: Update, context):
-        """Handle text messages → save as note."""
+        """Handle text messages → buffer and flush after 1.5s of silence."""
         msg = update.message
         user = msg.from_user
         text = msg.text.strip()
@@ -424,21 +444,211 @@ def main():
         if not text:
             return
 
-        logger.info(f"Note from {user.first_name} ({user.id}): {text[:80]}...")
+        uid = user.id
+        logger.info(f"Buffering text from {user.first_name} ({uid}): {text[:80]}...")
 
-        username = user.first_name or str(user.id)
+        # Append to buffer
+        _text_buffers.setdefault(uid, []).append(text)
+
+        # Cancel existing timer for this user
+        if uid in _text_timers:
+            _text_timers[uid].cancel()
+
+        # Schedule flush after 1.5s of silence
+        loop = asyncio.get_event_loop()
+        _text_timers[uid] = loop.call_later(
+            1.5,
+            lambda u=user, m=msg: asyncio.ensure_future(_flush_text_buffer(u, m)),
+        )
+
+    async def _flush_text_buffer(user, last_msg):
+        """Flush buffered text messages into a single note.txt."""
+        uid = user.id
+        chunks = _text_buffers.pop(uid, [])
+        _text_timers.pop(uid, None)
+
+        if not chunks:
+            return
+
+        combined = "\n".join(chunks)
+        username = user.first_name or str(uid)
         timestamp = datetime.datetime.now().strftime("%H%M%S")
         prefix = _storage_prefix(bot_name, username, timestamp)
 
+        logger.info(f"Flushing {len(chunks)} buffered text(s) from {username} ({len(combined)} chars)")
+
         try:
-            _save_file(s3_client, s3_bucket, prefix, "note.txt", text)
+            _save_file(s3_client, s3_bucket, prefix, "note.txt", combined)
             bot_state.file_count += 1
             bot_state.record_activity()
-            await msg.reply_text("Note saved.", parse_mode="Markdown")
+            await last_msg.reply_text(
+                f"Note saved ({len(chunks)} message{'s' if len(chunks) > 1 else ''}).",
+                parse_mode="Markdown",
+            )
         except Exception as e:
-            logger.error(f"Note save failed for {user.first_name}: {e}", exc_info=True)
-            bot_state.record_error(f"Note save failed for {user.first_name}: {str(e)[:200]}")
-            await msg.reply_text(f"Sorry, couldn't save the note.\nError: {str(e)[:200]}")
+            logger.error(f"Note save failed for {username}: {e}", exc_info=True)
+            bot_state.record_error(f"Note save failed for {username}: {str(e)[:200]}")
+            await last_msg.reply_text(f"Sorry, couldn't save the note.\nError: {str(e)[:200]}")
+
+    async def _ocr_single_image(file_bytes: bytes, page_label: str | None = None) -> str:
+        """Run OCR on a single image via OpenRouter vision model."""
+        client = _get_openrouter_ai_client()
+        if not client:
+            return "(OpenRouter not configured — OCR unavailable)"
+
+        model = os.getenv('OPENROUTER_MODEL', 'google/gemini-2.5-flash-lite')
+        b64 = base64.b64encode(file_bytes).decode('ascii')
+
+        prompt = "Extract all text from this image. Preserve the original formatting, layout, and language as much as possible. Output only the extracted text, no commentary."
+        if page_label:
+            prompt = f"[Page {page_label}] " + prompt
+
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    ],
+                }],
+                max_tokens=4096,
+            )
+            return resp.choices[0].message.content or ""
+        except Exception as e:
+            logger.error(f"OCR failed: {e}")
+            return f"(OCR error: {str(e)[:200]})"
+
+    async def _merge_ocr_pages(pages: list[str]) -> str:
+        """Use AI to merge multi-page OCR results into a clean document."""
+        client = _get_openrouter_ai_client()
+        if not client or len(pages) <= 1:
+            return "\n\n".join(pages)
+
+        model = os.getenv('OPENROUTER_MODEL', 'google/gemini-2.5-flash-lite')
+        combined = "\n\n---\n\n".join(f"[Page {i+1}]\n{p}" for i, p in enumerate(pages))
+
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": (
+                        "You are a document assembly assistant. The user provides OCR text from "
+                        "multiple pages of the same document. Merge them into one clean, coherent "
+                        "document. Fix obvious OCR errors, remove duplicate headers/footers, "
+                        "and preserve the original structure. Output only the merged text."
+                    )},
+                    {"role": "user", "content": combined},
+                ],
+                max_tokens=8192,
+            )
+            return resp.choices[0].message.content or "\n\n".join(pages)
+        except Exception as e:
+            logger.error(f"OCR merge failed: {e}")
+            return "\n\n".join(pages)
+
+    async def handle_photo(update: Update, context):
+        """Handle photo messages → OCR via OpenRouter vision, save as note."""
+        msg = update.message
+        user = msg.from_user
+        media_group_id = msg.media_group_id
+
+        if media_group_id:
+            # Part of a media group — buffer and debounce
+            photo = msg.photo[-1]  # largest resolution
+            _photo_buffers.setdefault(media_group_id, []).append(photo.file_id)
+            _photo_meta[media_group_id] = {"msg": msg, "user": user, "caption": msg.caption}
+
+            if media_group_id in _photo_timers:
+                _photo_timers[media_group_id].cancel()
+
+            loop = asyncio.get_event_loop()
+            _photo_timers[media_group_id] = loop.call_later(
+                2.0,
+                lambda gid=media_group_id: asyncio.ensure_future(_flush_photo_group(gid)),
+            )
+            return
+
+        # Single photo
+        logger.info(f"Received single photo from {user.first_name} ({user.id})")
+        processing_msg = await msg.reply_text("Processing image...")
+
+        try:
+            photo = msg.photo[-1]
+            file = await photo.get_file()
+            file_data = await file.download_as_bytearray()
+
+            ocr_text = await _ocr_single_image(bytes(file_data))
+
+            username = user.first_name or str(user.id)
+            timestamp = datetime.datetime.now().strftime("%H%M%S")
+            prefix = _storage_prefix(bot_name, username, timestamp)
+
+            # Prepend caption if provided
+            if msg.caption:
+                ocr_text = f"{msg.caption}\n\n---\n\n{ocr_text}"
+
+            _save_file(s3_client, s3_bucket, prefix, "note.txt", ocr_text)
+            bot_state.file_count += 1
+            bot_state.record_activity()
+
+            preview = ocr_text[:500] + ("..." if len(ocr_text) > 500 else "")
+            await processing_msg.edit_text(f"Image text extracted and saved.\n\n{preview}")
+
+        except Exception as e:
+            logger.error(f"Photo OCR failed for {user.first_name}: {e}", exc_info=True)
+            bot_state.record_error(f"Photo OCR failed for {user.first_name}: {str(e)[:200]}")
+            await processing_msg.edit_text(f"Sorry, couldn't process the image.\nError: {str(e)[:200]}")
+
+    async def _flush_photo_group(media_group_id: str):
+        """Flush a media group: OCR each photo, merge, save as note."""
+        file_ids = _photo_buffers.pop(media_group_id, [])
+        meta = _photo_meta.pop(media_group_id, {})
+        _photo_timers.pop(media_group_id, None)
+
+        if not file_ids or not meta:
+            return
+
+        msg = meta["msg"]
+        user = meta["user"]
+        caption = meta.get("caption")
+
+        logger.info(f"Processing media group {media_group_id}: {len(file_ids)} photos from {user.first_name}")
+        processing_msg = await msg.reply_text(f"Processing {len(file_ids)} images...")
+
+        try:
+            # Download and OCR each photo
+            pages = []
+            for i, file_id in enumerate(file_ids):
+                file = await msg.get_bot().get_file(file_id)
+                file_data = await file.download_as_bytearray()
+                page_text = await _ocr_single_image(bytes(file_data), page_label=str(i + 1))
+                pages.append(page_text)
+
+            # Merge pages
+            merged = await _merge_ocr_pages(pages)
+
+            username = user.first_name or str(user.id)
+            timestamp = datetime.datetime.now().strftime("%H%M%S")
+            prefix = _storage_prefix(bot_name, username, timestamp)
+
+            if caption:
+                merged = f"{caption}\n\n---\n\n{merged}"
+
+            _save_file(s3_client, s3_bucket, prefix, "note.txt", merged)
+            bot_state.file_count += 1
+            bot_state.record_activity()
+
+            preview = merged[:500] + ("..." if len(merged) > 500 else "")
+            await processing_msg.edit_text(
+                f"Extracted text from {len(file_ids)} images and saved.\n\n{preview}"
+            )
+
+        except Exception as e:
+            logger.error(f"Photo group OCR failed for {user.first_name}: {e}", exc_info=True)
+            bot_state.record_error(f"Photo group OCR failed for {user.first_name}: {str(e)[:200]}")
+            await processing_msg.edit_text(f"Sorry, couldn't process the images.\nError: {str(e)[:200]}")
 
     async def handle_document(update: Update, context):
         """Handle document uploads — route audio/video to transcription, store everything else."""
@@ -534,6 +744,7 @@ def main():
         filters.VOICE | filters.AUDIO | filters.VIDEO | filters.VIDEO_NOTE,
         handle_voice
     ))
+    tg_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
