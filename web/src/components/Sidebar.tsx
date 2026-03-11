@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { DimensionMeta, ViewType } from '../types';
 
 interface SidebarProps {
@@ -9,7 +10,15 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const NUM_LABELS = ['\u2460', '\u2461', '\u2462', '\u2463', '\u2464', '\u2465', '\u2466', '\u2467', '\u2468', '\u2469', '\u246A', '\u246B', '\u246C', '\u246D'];
+const GROUP_LABELS: Record<string, string> = {
+  strategy: '\u{1F9ED} Strategy',
+  gtm: '\u{1F680} Go-to-Market',
+  build: '\u{1F527} Build',
+  org: '\u{1F3E2} Organization',
+  execution: '\u{1F3AF} Execution',
+};
+
+const GROUP_ORDER = ['strategy', 'gtm', 'build', 'org', 'execution'];
 
 export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, open, onClose }: SidebarProps) {
   const handleClick = (view: ViewType, dimIndex?: number) => {
@@ -17,12 +26,37 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
     onClose();
   };
 
+  const grouped = useMemo(() => {
+    const groups: { group: string; label: string; items: { dim: DimensionMeta; index: number }[] }[] = [];
+    const groupMap = new Map<string, { dim: DimensionMeta; index: number }[]>();
+
+    dimensions.forEach((dim, i) => {
+      const g = dim.group || 'other';
+      if (!groupMap.has(g)) groupMap.set(g, []);
+      groupMap.get(g)!.push({ dim, index: i });
+    });
+
+    for (const g of GROUP_ORDER) {
+      const items = groupMap.get(g);
+      if (items) {
+        groups.push({ group: g, label: GROUP_LABELS[g] || g, items });
+        groupMap.delete(g);
+      }
+    }
+    // Any remaining ungrouped
+    for (const [g, items] of groupMap) {
+      groups.push({ group: g, label: GROUP_LABELS[g] || g, items });
+    }
+
+    return groups;
+  }, [dimensions]);
+
   return (
     <aside className={`sidebar${open ? ' open' : ''}`}>
       <div className="sidebar-header">
         <div className="logo">{'\u2764\uFE0F'} CareMojo</div>
         <h2>Decision Atlas</h2>
-        <div className="sub">Feb 23 {'\u2013'} Mar 5, 2026</div>
+        <div className="sub">Feb 23 {'\u2013'} Mar 11, 2026</div>
       </div>
 
       <div className="sidebar-nav">
@@ -33,32 +67,48 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
           <span className="icon">{'\uD83C\uDFE0'}</span>Overview
         </div>
 
-        <div className="nav-section">Decision Dimensions</div>
-        {dimensions.map((dim, i) => (
-          <div
-            key={dim.id}
-            className={`nav-item${currentView === 'd3' && currentDimIndex === i ? ' active' : ''}`}
-            onClick={() => handleClick('d3', i)}
-          >
-            <span className="icon">{dim.icon}</span>
-            {dim.title.replace(/决策树$/, '')}
-            <span className="num">{NUM_LABELS[i]}</span>
+        {grouped.map(({ group, label, items }) => (
+          <div key={group}>
+            <div className="nav-section">{label}</div>
+            {items.map(({ dim, index }) => {
+              // Special views that aren't tree dimensions
+              if (dim.id === 'competitor') {
+                return (
+                  <div
+                    key={dim.id}
+                    className={`nav-item${currentView === 'competitor' ? ' active' : ''}`}
+                    onClick={() => handleClick('competitor')}
+                  >
+                    <span className="icon">{dim.icon}</span>
+                    {dim.title}
+                  </div>
+                );
+              }
+              if (dim.id === 'task_search') {
+                return (
+                  <div
+                    key={dim.id}
+                    className={`nav-item${currentView === 'tasks' ? ' active' : ''}`}
+                    onClick={() => handleClick('tasks')}
+                  >
+                    <span className="icon">{dim.icon}</span>
+                    {dim.title}
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={dim.id}
+                  className={`nav-item${currentView === 'd3' && currentDimIndex === index ? ' active' : ''}`}
+                  onClick={() => handleClick('d3', index)}
+                >
+                  <span className="icon">{dim.icon}</span>
+                  {dim.title}
+                </div>
+              );
+            })}
           </div>
         ))}
-
-        <div
-          className={`nav-item${currentView === 'competitor' ? ' active' : ''}`}
-          onClick={() => handleClick('competitor')}
-        >
-          <span className="icon">{'\u2694\uFE0F'}</span>竞争格局
-        </div>
-
-        <div
-          className={`nav-item${currentView === 'tasks' ? ' active' : ''}`}
-          onClick={() => handleClick('tasks')}
-        >
-          <span className="icon">{'\uD83D\uDD0D'}</span>Task Search
-        </div>
       </div>
 
       <div className="sidebar-legend">

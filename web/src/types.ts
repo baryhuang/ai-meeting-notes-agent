@@ -1,9 +1,10 @@
 export interface DimensionMeta {
   id: string;
-  file: string;
+  file?: string;
   icon: string;
   title: string;
   desc: string;
+  group?: string;
   nodeW?: number;
   nodeH?: number;
   colSpacing?: number;
