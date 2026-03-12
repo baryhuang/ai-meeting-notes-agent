@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { UserButton } from '@insforge/react';
+import { Settings } from 'lucide-react';
 import type { DimensionMeta, ViewType } from '../types';
 
 interface SidebarProps {
@@ -131,21 +133,15 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
         ))}
       </div>
 
-      <div className="sidebar-settings">
-        <div
-          className={`nav-item${currentView === 'settings' ? ' active' : ''}`}
+      <div className="sidebar-footer">
+        <button
+          className={`settings-icon-btn${currentView === 'settings' ? ' active' : ''}`}
           onClick={() => handleClick('settings')}
+          title="Settings"
         >
-          <span className="icon">{'\u2699\uFE0F'}</span>Settings
-        </div>
-      </div>
-
-      <div className="sidebar-legend">
-        <div className="title">Legend</div>
-        <div className="legend-row"><div className="legend-dot" style={{ background: 'var(--red)' }} />{'\u274C'} Abandoned</div>
-        <div className="legend-row"><div className="legend-dot" style={{ background: 'var(--green)' }} />{'\u2713'} Chosen</div>
-        <div className="legend-row"><div className="legend-dot" style={{ background: 'var(--orange)' }} />{'\u25D0'} Partial</div>
-        <div className="legend-row"><div className="legend-dot" style={{ background: 'var(--teal)' }} />{'\u2605'} Final</div>
+          <Settings size={18} />
+        </button>
+        <UserButton />
       </div>
     </aside>
   );

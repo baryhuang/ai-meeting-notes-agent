@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { SignInButton, SignedIn, SignedOut, UserButton, useUser } from '@insforge/react';
+import { SignInButton, SignedIn, SignedOut, useUser } from '@insforge/react';
 import { useAtlasData } from './hooks/useAtlasData';
 import { useWorkspace } from './hooks/useWorkspace';
 import { Sidebar } from './components/Sidebar';
@@ -69,9 +69,6 @@ function AuthenticatedApp() {
       <button className="mobile-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
         {'\u2630'}
       </button>
-      <div className="user-button-wrapper">
-        <UserButton />
-      </div>
       <div className="app">
         <Sidebar
           dimensions={dimensions}

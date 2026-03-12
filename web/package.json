@@ -13,6 +13,7 @@
     "@insforge/react": "^1.1.8",
     "@insforge/sdk": "^1.1.6-dev.0",
     "d3": "^7.9.0",
+    "lucide-react": "^0.577.0",
     "markmap-lib": "^0.18.12",
     "markmap-view": "^0.18.12",
     "react": "^19.2.0",
