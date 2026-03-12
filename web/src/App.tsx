@@ -13,9 +13,20 @@ import { VEMDocumentView } from './components/VEMDocumentView';
 import { PartnersView } from './components/PartnersView';
 import type { ViewType } from './types';
 
+// All peakmojo.com / peakmojo.ai users share the same data workspace
+const PEAKMOJO_USER_ID = '586de5aa-b322-4236-8480-7f5d4ce9c39c';
+
+function getDataUserId(user: { id: string; email?: string }): string {
+  const email = user.email?.toLowerCase() ?? '';
+  if (email.endsWith('@peakmojo.com') || email.endsWith('@peakmojo.ai')) {
+    return PEAKMOJO_USER_ID;
+  }
+  return user.id;
+}
+
 function AuthenticatedApp() {
   const { user } = useUser();
-  const userId = user!.id;
+  const userId = getDataUserId(user!);
   const { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, loading, error } = useAtlasData(userId);
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [currentDimIndex, setCurrentDimIndex] = useState(0);
