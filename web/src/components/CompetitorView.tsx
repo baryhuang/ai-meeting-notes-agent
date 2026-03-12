@@ -249,33 +249,70 @@ function addToHistory(query: string) {
 
 /* ── AI Query Result Modal ──────────────────────────────── */
 
+const ALL_COLUMNS: { header: string; key: keyof CompetitorRow }[] = [
+  { header: 'Company', key: 'name' },
+  { header: 'Section', key: 'section' },
+  { header: 'Category', key: 'category' },
+  { header: 'Threat', key: 'threat' },
+  { header: 'Date', key: 'date' },
+  { header: 'Primary Focus', key: 'primary_focus' },
+  { header: 'Target Customer', key: 'target_customer' },
+  { header: 'Pricing', key: 'pricing_model' },
+  { header: 'Price Range', key: 'price_range' },
+  { header: 'Funding', key: 'funding' },
+  { header: 'AI', key: 'uses_ai' },
+  { header: 'CNA', key: 'serves_cna' },
+  { header: 'RN', key: 'serves_rn' },
+  { header: 'Key Differentiator', key: 'key_differentiator' },
+  { header: 'Relevance', key: 'relevance' },
+  { header: 'Website', key: 'website' },
+];
+
+function formatCell(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '—';
+  if (typeof value === 'boolean') return value ? '\u2705' : '';
+  return String(value);
+}
+
+function formatCsvCell(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  const s = String(value);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportCsv(rows: CompetitorRow[], title: string) {
+  const header = ALL_COLUMNS.map(c => c.header).join(',');
+  const body = rows.map(row => ALL_COLUMNS.map(col => formatCsvCell(row[col.key])).join(',')).join('\n');
+  const csv = header + '\n' + body;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${title.replace(/[^a-zA-Z0-9]+/g, '_').toLowerCase()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function AIResultModal({ result, competitors, onClose }: {
   result: AIQueryResult;
   competitors: CompetitorRow[];
   onClose: () => void;
 }) {
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
   const compMap = useMemo(() => {
     const m = new Map<string, CompetitorRow>();
     for (const c of competitors) m.set(c.name.toLowerCase(), c);
     return m;
   }, [competitors]);
 
-  const showTip = useCallback((rowData: Record<string, string>, e: React.MouseEvent) => {
-    clearTimeout(hideTimer.current);
-    const nameKey = result.columns[0]?.key;
-    const name = nameKey ? rowData[nameKey] : '';
-    const comp = compMap.get(name?.toLowerCase() || '');
-    if (!comp) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTooltip({ row: comp, x: rect.left + rect.width / 2, y: rect.bottom + 8 });
-  }, [compMap, result.columns]);
-
-  const hideTip = useCallback(() => {
-    hideTimer.current = setTimeout(() => setTooltip(null), 150);
-  }, []);
+  // Match AI result rows to full competitor data
+  const matchedRows = useMemo(() => {
+    const nameKey = result.columns[0]?.key || 'name';
+    return result.rows
+      .map(row => compMap.get((row[nameKey] || '').toLowerCase()))
+      .filter((c): c is CompetitorRow => c !== undefined);
+  }, [result, compMap]);
 
   return (
     <div className="ai-modal-overlay" onClick={onClose}>
@@ -293,16 +330,16 @@ function AIResultModal({ result, competitors, onClose }: {
           <table className="ai-modal-table">
             <thead>
               <tr>
-                {result.columns.map(col => (
+                {ALL_COLUMNS.map(col => (
                   <th key={col.key}>{col.header}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {result.rows.map((row, i) => (
-                <tr key={i} onMouseEnter={(e) => showTip(row, e)} onMouseLeave={hideTip}>
-                  {result.columns.map(col => (
-                    <td key={col.key}>{row[col.key] || '—'}</td>
+              {matchedRows.map((row, i) => (
+                <tr key={i}>
+                  {ALL_COLUMNS.map(col => (
+                    <td key={col.key}>{formatCell(row[col.key])}</td>
                   ))}
                 </tr>
               ))}
@@ -311,11 +348,12 @@ function AIResultModal({ result, competitors, onClose }: {
         </div>
 
         <div className="ai-modal-footer">
-          {result.rows.length} results
+          <span>{matchedRows.length} results</span>
+          <button className="ai-export-btn" onClick={() => exportCsv(matchedRows, result.title)}>
+            Export CSV
+          </button>
         </div>
       </div>
-
-      {tooltip && <CompanyTooltip {...tooltip} />}
     </div>
   );
 }
