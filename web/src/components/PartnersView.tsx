@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { TreeNode } from '../types';
+import { TimelineBar, collectDates, parseDateOrdinal } from './MarkmapView';
 import './partners-view.css';
 
 /* ── Flatten tree into partner rows ──────────────── */
@@ -148,7 +149,24 @@ type SortCol = 'name' | 'tier' | 'status' | 'fit' | 'priority' | 'contact';
 /* ── Main Component ──────────────────────────────── */
 
 export function PartnersView({ treeData }: { treeData: TreeNode }) {
-  const rows = useMemo(() => flattenPartners(treeData), [treeData]);
+  const allDates = useMemo(() => collectDates(treeData), [treeData]);
+  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+
+  useEffect(() => {
+    setDateIndex(allDates.length - 1);
+  }, [allDates]);
+
+  const dateCutoff = allDates[dateIndex] ?? Infinity;
+
+  const rows = useMemo(() => {
+    const all = flattenPartners(treeData);
+    if (dateCutoff === Infinity) return all;
+    return all.filter(r => {
+      const ord = parseDateOrdinal(r.date || '');
+      return ord === null || ord <= dateCutoff;
+    });
+  }, [treeData, dateCutoff]);
+
   const [sortCol, setSortCol] = useState<SortCol>('fit');
   const [sortAsc, setSortAsc] = useState(true);
   const [selected, setSelected] = useState<PartnerRow | null>(null);
@@ -245,6 +263,8 @@ export function PartnersView({ treeData }: { treeData: TreeNode }) {
           </table>
         </div>
       </div>
+
+      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
 
       {selected && <DetailModal row={selected} onClose={() => setSelected(null)} />}
     </div>
