@@ -43,17 +43,20 @@ function NodeBlock({ node, level }: { node: TreeNode; level: number }) {
 
 export function VEMDocumentView({ treeData }: { treeData: TreeNode }) {
   const allDates = useMemo(() => collectDates(treeData), [treeData]);
-  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+  const [startIndex, setStartIndex] = useState(0);
+  const [endIndex, setEndIndex] = useState(allDates.length - 1);
 
   useEffect(() => {
-    setDateIndex(allDates.length - 1);
+    setStartIndex(0);
+    setEndIndex(allDates.length - 1);
   }, [allDates]);
 
-  const cutoff = allDates[dateIndex] ?? Infinity;
+  const startOrd = allDates[startIndex] ?? 0;
+  const endOrd = allDates[endIndex] ?? Infinity;
   const filtered = useMemo(() => {
-    if (cutoff === Infinity) return treeData;
-    return filterByDate(treeData, cutoff) || treeData;
-  }, [treeData, cutoff]);
+    if (endOrd === Infinity && startOrd === 0) return treeData;
+    return filterByDate(treeData, endOrd) || treeData;
+  }, [treeData, startOrd, endOrd]);
 
   const sections = filtered.children || [];
 
@@ -70,7 +73,7 @@ export function VEMDocumentView({ treeData }: { treeData: TreeNode }) {
           </section>
         ))}
       </div>
-      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
+      <TimelineBar allDates={allDates} startIndex={startIndex} endIndex={endIndex} setStartIndex={setStartIndex} setEndIndex={setEndIndex} />
     </div>
   );
 }

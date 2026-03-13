@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { DimensionMeta, TreeNode, ViewType } from '../types';
 import {
   parseDateOrdinal,
@@ -8,11 +8,15 @@ import {
   statusColors,
   statusIcons,
 } from './MarkmapView';
+import { findDateIndex } from '../hooks/useTimelineCutoff';
+import type { TimelineRange } from '../hooks/useTimelineCutoff';
 
 interface OverviewViewProps {
   dimensions: DimensionMeta[];
   dimensionsData: Record<string, TreeNode>;
   onSwitch: (view: ViewType, dimIndex?: number) => void;
+  timelineRange?: TimelineRange | null;
+  onTimelineRangeChange?: (range: Partial<TimelineRange>) => void;
 }
 
 interface DayNode {
@@ -21,11 +25,11 @@ interface DayNode {
   desc?: string;
 }
 
-function getNodesForDate(tree: TreeNode, dateOrd: number): DayNode[] {
+function getNodesInRange(tree: TreeNode, startOrd: number, endOrd: number): DayNode[] {
   const results: DayNode[] = [];
   function walk(node: TreeNode) {
     const ord = parseDateOrdinal(node.date || '');
-    if (ord === dateOrd) {
+    if (ord !== null && ord >= startOrd && ord <= endOrd) {
       results.push({ name: node.name, status: node.status, desc: node.desc });
     }
     (node.children || []).forEach(walk);
@@ -34,7 +38,7 @@ function getNodesForDate(tree: TreeNode, dateOrd: number): DayNode[] {
   return results;
 }
 
-export function OverviewView({ dimensions, dimensionsData, onSwitch }: OverviewViewProps) {
+export function OverviewView({ dimensions, dimensionsData, onSwitch, timelineRange, onTimelineRangeChange }: OverviewViewProps) {
   const allDates = useMemo(() => {
     const dateSet = new Set<number>();
     for (const dim of dimensions) {
@@ -45,9 +49,25 @@ export function OverviewView({ dimensions, dimensionsData, onSwitch }: OverviewV
     return Array.from(dateSet).sort((a, b) => a - b);
   }, [dimensions, dimensionsData]);
 
-  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+  const initialStart = timelineRange?.startOrd != null && allDates.length > 0
+    ? findDateIndex(allDates, timelineRange.startOrd) : 0;
+  const initialEnd = timelineRange?.endOrd != null && allDates.length > 0
+    ? findDateIndex(allDates, timelineRange.endOrd) : allDates.length - 1;
+  const [startIndex, setStartIndex] = useState(initialStart);
+  const [endIndex, setEndIndex] = useState(initialEnd);
+
+  useEffect(() => {
+    if (timelineRange?.startOrd != null && allDates.length > 0) {
+      setStartIndex(findDateIndex(allDates, timelineRange.startOrd));
+    }
+    if (timelineRange?.endOrd != null && allDates.length > 0) {
+      setEndIndex(findDateIndex(allDates, timelineRange.endOrd));
+    }
+  }, [timelineRange?.startOrd, timelineRange?.endOrd, allDates]);
+
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
-  const currentDateOrd = allDates[dateIndex] ?? null;
+  const currentStartOrd = allDates[startIndex] ?? null;
+  const currentEndOrd = allDates[endIndex] ?? null;
 
   const toggleExpand = (dimId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -64,8 +84,8 @@ export function OverviewView({ dimensions, dimensionsData, onSwitch }: OverviewV
       <div className="overview-grid">
         {dimensions.map((dim, i) => {
           const tree = dimensionsData[dim.id];
-          const nodes = tree && currentDateOrd !== null
-            ? getNodesForDate(tree, currentDateOrd)
+          const nodes = tree && currentStartOrd !== null && currentEndOrd !== null
+            ? getNodesInRange(tree, currentStartOrd, currentEndOrd)
             : [];
           const expanded = expandedCards.has(dim.id);
 
@@ -122,11 +142,20 @@ export function OverviewView({ dimensions, dimensionsData, onSwitch }: OverviewV
 
       {allDates.length > 0 && (
         <div className="overview-date-label">
-          {currentDateOrd !== null ? ordinalToLabel(currentDateOrd) : ''}
+          {currentStartOrd !== null && currentEndOrd !== null
+            ? `${ordinalToLabel(currentStartOrd)} – ${ordinalToLabel(currentEndOrd)}`
+            : ''}
         </div>
       )}
 
-      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
+      <TimelineBar
+        allDates={allDates}
+        startIndex={startIndex}
+        endIndex={endIndex}
+        setStartIndex={setStartIndex}
+        setEndIndex={setEndIndex}
+        onRangeChange={onTimelineRangeChange}
+      />
     </div>
   );
 }

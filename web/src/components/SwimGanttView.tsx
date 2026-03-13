@@ -2,6 +2,8 @@ import { useRef, useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import type { TreeNode } from '../types';
 import { collectDates, parseDateOrdinal, TimelineBar } from './MarkmapView';
+import { findDateIndex } from '../hooks/useTimelineCutoff';
+import type { TimelineRange } from '../hooks/useTimelineCutoff';
 
 /* ── Status → color mapping (same as D3TreeView) ── */
 const statusColors: Record<string, string> = {
@@ -152,15 +154,15 @@ function buildLanes(root: TreeNode): SwimLane[] {
   });
 }
 
-/* ── Filter tree by date cutoff ── */
-function filterTreeByDate(node: TreeNode, cutoff: number): TreeNode {
+/* ── Filter tree by date range ── */
+function filterTreeByDateRange(node: TreeNode, startOrd: number, endOrd: number): TreeNode {
   const children = (node.children || [])
-    .map(c => filterTreeByDate(c, cutoff))
+    .map(c => filterTreeByDateRange(c, startOrd, endOrd))
     .filter(c => {
       const ord = parseDateOrdinal(c.date || '');
-      // Keep if: no date, date <= cutoff, or has children that survived
+      // Keep if: no date, date in range, or has children that survived
       if (ord === null) return true;
-      if (ord <= cutoff) return true;
+      if (ord >= startOrd && ord <= endOrd) return true;
       return (c.children || []).length > 0;
     });
   return { ...node, children };
@@ -169,22 +171,39 @@ function filterTreeByDate(node: TreeNode, cutoff: number): TreeNode {
 /* ── Component ── */
 interface SwimGanttViewProps {
   treeData: TreeNode;
+  timelineRange?: TimelineRange | null;
+  onTimelineRangeChange?: (range: Partial<TimelineRange>) => void;
 }
 
-export function SwimGanttView({ treeData }: SwimGanttViewProps) {
+export function SwimGanttView({ treeData, timelineRange, onTimelineRangeChange }: SwimGanttViewProps) {
   const headerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, data: null });
 
   // Timeline state
   const allDates = useMemo(() => collectDates(treeData), [treeData]);
-  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+  const initialStart = timelineRange?.startOrd != null && allDates.length > 0
+    ? findDateIndex(allDates, timelineRange.startOrd) : 0;
+  const initialEnd = timelineRange?.endOrd != null && allDates.length > 0
+    ? findDateIndex(allDates, timelineRange.endOrd) : allDates.length - 1;
+  const [startIndex, setStartIndex] = useState(initialStart);
+  const [endIndex, setEndIndex] = useState(initialEnd);
+
+  useEffect(() => {
+    if (timelineRange?.startOrd != null && allDates.length > 0) {
+      setStartIndex(findDateIndex(allDates, timelineRange.startOrd));
+    }
+    if (timelineRange?.endOrd != null && allDates.length > 0) {
+      setEndIndex(findDateIndex(allDates, timelineRange.endOrd));
+    }
+  }, [timelineRange?.startOrd, timelineRange?.endOrd, allDates]);
 
   const filteredTree = useMemo(() => {
     if (allDates.length <= 1) return treeData;
-    const cutoff = allDates[dateIndex] ?? Infinity;
-    return filterTreeByDate(treeData, cutoff);
-  }, [treeData, allDates, dateIndex]);
+    const startCutoff = allDates[startIndex] ?? 0;
+    const endCutoff = allDates[endIndex] ?? Infinity;
+    return filterTreeByDateRange(treeData, startCutoff, endCutoff);
+  }, [treeData, allDates, startIndex, endIndex]);
 
   useEffect(() => {
     if (!headerRef.current || !bodyRef.current) return;
@@ -443,7 +462,14 @@ export function SwimGanttView({ treeData }: SwimGanttViewProps) {
         </div>
       </div>
 
-      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
+      <TimelineBar
+        allDates={allDates}
+        startIndex={startIndex}
+        endIndex={endIndex}
+        setStartIndex={setStartIndex}
+        setEndIndex={setEndIndex}
+        onRangeChange={onTimelineRangeChange}
+      />
     </div>
   );
 }

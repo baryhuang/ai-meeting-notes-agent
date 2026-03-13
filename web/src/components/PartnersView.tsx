@@ -150,22 +150,25 @@ type SortCol = 'name' | 'tier' | 'status' | 'fit' | 'priority' | 'contact';
 
 export function PartnersView({ treeData }: { treeData: TreeNode }) {
   const allDates = useMemo(() => collectDates(treeData), [treeData]);
-  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+  const [startIndex, setStartIndex] = useState(0);
+  const [endIndex, setEndIndex] = useState(allDates.length - 1);
 
   useEffect(() => {
-    setDateIndex(allDates.length - 1);
+    setStartIndex(0);
+    setEndIndex(allDates.length - 1);
   }, [allDates]);
 
-  const dateCutoff = allDates[dateIndex] ?? Infinity;
+  const startCutoff = allDates[startIndex] ?? 0;
+  const endCutoff = allDates[endIndex] ?? Infinity;
 
   const rows = useMemo(() => {
     const all = flattenPartners(treeData);
-    if (dateCutoff === Infinity) return all;
+    if (endCutoff === Infinity && startCutoff === 0) return all;
     return all.filter(r => {
       const ord = parseDateOrdinal(r.date || '');
-      return ord === null || ord <= dateCutoff;
+      return ord === null || (ord >= startCutoff && ord <= endCutoff);
     });
-  }, [treeData, dateCutoff]);
+  }, [treeData, startCutoff, endCutoff]);
 
   const [sortCol, setSortCol] = useState<SortCol>('fit');
   const [sortAsc, setSortAsc] = useState(true);
@@ -264,7 +267,7 @@ export function PartnersView({ treeData }: { treeData: TreeNode }) {
         </div>
       </div>
 
-      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
+      <TimelineBar allDates={allDates} startIndex={startIndex} endIndex={endIndex} setStartIndex={setStartIndex} setEndIndex={setEndIndex} />
 
       {selected && <DetailModal row={selected} onClose={() => setSelected(null)} />}
     </div>

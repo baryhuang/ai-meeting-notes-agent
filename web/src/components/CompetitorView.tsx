@@ -1,11 +1,15 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import type { LandscapeData, CompetitorRow, AIQueryResult } from '../types';
 import { parseDateOrdinal, TimelineBar } from './MarkmapView';
+import { findDateIndex } from '../hooks/useTimelineCutoff';
+import type { TimelineRange } from '../hooks/useTimelineCutoff';
 import { queryCompetitorsAI } from '../api';
 import { ReactSearchAutocomplete } from 'react-search-autocomplete';
 
 interface CompetitorViewProps {
   data: LandscapeData;
+  timelineRange?: TimelineRange | null;
+  onTimelineRangeChange?: (range: Partial<TimelineRange>) => void;
 }
 
 /* ── Tooltip ────────────────────────────────────────────── */
@@ -360,7 +364,7 @@ function AIResultModal({ result, competitors, onClose }: {
 
 /* ── Main component ─────────────────────────────────────── */
 
-export function CompetitorView({ data }: CompetitorViewProps) {
+export function CompetitorView({ data, timelineRange, onTimelineRangeChange }: CompetitorViewProps) {
   const [view, setView] = useState<'map' | 'table'>('map');
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -411,18 +415,33 @@ export function CompetitorView({ data }: CompetitorViewProps) {
     return Array.from(dateSet).sort((a, b) => a - b);
   }, [data.competitors, getDate]);
 
-  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+  const initialStart = timelineRange?.startOrd != null && allDates.length > 0
+    ? findDateIndex(allDates, timelineRange.startOrd) : 0;
+  const initialEnd = timelineRange?.endOrd != null && allDates.length > 0
+    ? findDateIndex(allDates, timelineRange.endOrd) : allDates.length - 1;
+  const [startIndex, setStartIndex] = useState(initialStart);
+  const [endIndex, setEndIndex] = useState(initialEnd);
 
-  // Filter competitors by date cutoff
+  useEffect(() => {
+    if (timelineRange?.startOrd != null && allDates.length > 0) {
+      setStartIndex(findDateIndex(allDates, timelineRange.startOrd));
+    }
+    if (timelineRange?.endOrd != null && allDates.length > 0) {
+      setEndIndex(findDateIndex(allDates, timelineRange.endOrd));
+    }
+  }, [timelineRange?.startOrd, timelineRange?.endOrd, allDates]);
+
+  // Filter competitors by date range
   const filtered = useMemo(() => {
     if (allDates.length <= 1) return data.competitors;
-    const cutoff = allDates[dateIndex] ?? Infinity;
+    const startCutoff = allDates[startIndex] ?? 0;
+    const endCutoff = allDates[endIndex] ?? Infinity;
     return data.competitors.filter(c => {
       const ord = parseDateOrdinal(getDate(c));
       if (ord === null) return true;
-      return ord <= cutoff;
+      return ord >= startCutoff && ord <= endCutoff;
     });
-  }, [data.competitors, allDates, dateIndex, getDate]);
+  }, [data.competitors, allDates, startIndex, endIndex, getDate]);
 
   const sections = useMemo(() => groupBySection(filtered), [filtered]);
 
@@ -515,7 +534,14 @@ export function CompetitorView({ data }: CompetitorViewProps) {
 
       </div>
 
-      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
+      <TimelineBar
+        allDates={allDates}
+        startIndex={startIndex}
+        endIndex={endIndex}
+        setStartIndex={setStartIndex}
+        setEndIndex={setEndIndex}
+        onRangeChange={onTimelineRangeChange}
+      />
 
       {tooltip && <CompanyTooltip {...tooltip} />}
 

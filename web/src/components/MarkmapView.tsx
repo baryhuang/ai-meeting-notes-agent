@@ -1,6 +1,8 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { Markmap, deriveOptions } from 'markmap-view';
 import type { TreeNode } from '../types';
+import { findDateIndex } from '../hooks/useTimelineCutoff';
+import type { TimelineRange } from '../hooks/useTimelineCutoff';
 
 export const statusColors: Record<string, string> = {
   origin: '#3a6da0', abandoned: '#c94040', chosen: '#3a7d44',
@@ -95,7 +97,7 @@ export function ordinalToLabel(ord: number): string {
  * Preserves same node objects so D3 keys stay stable → parent-anchored animations.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyDateFilter(node: any, cutoff: number): void {
+function applyDateFilter(node: any, startOrd: number, endOrd: number): void {
   if (!node) return;
 
   // Stash full children on first visit
@@ -105,16 +107,16 @@ function applyDateFilter(node: any, cutoff: number): void {
 
   const all = node._allChildren || [];
 
-  // Keep children whose dateOrd <= cutoff (or no dateOrd = structural)
+  // Keep children whose dateOrd is within [startOrd, endOrd] (or no dateOrd = structural)
   node.children = all.filter((child: { payload?: Record<string, unknown> }) => {
     const dateOrd = child.payload?.dateOrd as number | undefined;
-    if (dateOrd !== undefined && dateOrd > cutoff) return false;
-    return true;
+    if (dateOrd === undefined) return true;
+    return dateOrd >= startOrd && dateOrd <= endOrd;
   });
 
   // Recurse
   for (const child of node.children) {
-    applyDateFilter(child, cutoff);
+    applyDateFilter(child, startOrd, endOrd);
   }
 }
 
@@ -122,64 +124,152 @@ function applyDateFilter(node: any, cutoff: number): void {
 
 interface TimelineBarProps {
   allDates: number[];
-  dateIndex: number;
-  setDateIndex: (i: number | ((prev: number) => number)) => void;
+  startIndex: number;
+  endIndex: number;
+  setStartIndex: (i: number) => void;
+  setEndIndex: (i: number) => void;
+  onRangeChange?: (range: Partial<TimelineRange>) => void;
 }
 
-export function TimelineBar({ allDates, dateIndex, setDateIndex }: TimelineBarProps) {
-  const goPrev = () => setDateIndex((i: number) => Math.max(0, i - 1));
-  const goNext = () => setDateIndex((i: number) => Math.min(allDates.length - 1, i + 1));
+export function TimelineBar({ allDates, startIndex, endIndex, setStartIndex, setEndIndex, onRangeChange }: TimelineBarProps) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef<'start' | 'end' | null>(null);
 
+  const setStart = useCallback((i: number) => {
+    const clamped = Math.max(0, Math.min(i, endIndex));
+    setStartIndex(clamped);
+    if (onRangeChange && allDates[clamped] !== undefined) {
+      onRangeChange({ startOrd: allDates[clamped] });
+    }
+  }, [endIndex, setStartIndex, onRangeChange, allDates]);
+
+  const setEnd = useCallback((i: number) => {
+    const clamped = Math.min(allDates.length - 1, Math.max(i, startIndex));
+    setEndIndex(clamped);
+    if (onRangeChange && allDates[clamped] !== undefined) {
+      onRangeChange({ endOrd: allDates[clamped] });
+    }
+  }, [startIndex, allDates.length, setEndIndex, onRangeChange, allDates]);
+
+  // Convert a pointer clientX to the nearest date index
+  const xToIndex = useCallback((clientX: number): number => {
+    const track = trackRef.current;
+    if (!track || allDates.length <= 1) return 0;
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return Math.round(ratio * (allDates.length - 1));
+  }, [allDates.length]);
+
+  // Drag handlers
+  const onPointerDown = useCallback((handle: 'start' | 'end', e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    draggingRef.current = handle;
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    const idx = xToIndex(e.clientX);
+    if (draggingRef.current === 'start') {
+      setStart(idx);
+    } else {
+      setEnd(idx);
+    }
+  }, [xToIndex, setStart, setEnd]);
+
+  const onPointerUp = useCallback(() => {
+    draggingRef.current = null;
+  }, []);
+
+  // Click on track to move nearest handle
+  const onTrackClick = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).classList.contains('tl-knob')) return;
+    const idx = xToIndex(e.clientX);
+    if (Math.abs(idx - startIndex) <= Math.abs(idx - endIndex)) {
+      setStart(idx);
+    } else {
+      setEnd(idx);
+    }
+  }, [xToIndex, startIndex, endIndex, setStart, setEnd]);
+
+  // Keyboard: Shift+Arrow for start, Arrow for end
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
         e.preventDefault();
-        setDateIndex((i: number) => Math.max(0, i - 1));
+        if (e.shiftKey) setStart(startIndex - 1);
+        else setEnd(endIndex - 1);
       } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
         e.preventDefault();
-        setDateIndex((i: number) => Math.min(allDates.length - 1, i + 1));
+        if (e.shiftKey) setStart(startIndex + 1);
+        else setEnd(endIndex + 1);
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [allDates.length, setDateIndex]);
+  }, [startIndex, endIndex, setStart, setEnd]);
 
   if (allDates.length === 0) return null;
 
+  const pct = (i: number) => allDates.length === 1 ? 50 : (i / (allDates.length - 1)) * 100;
+  const startPct = pct(startIndex);
+  const endPct = pct(endIndex);
+
   return (
     <div className="timeline-bar">
-      <button className="tl-arrow" onClick={goPrev} disabled={dateIndex <= 0} aria-label="Previous date">
-        {'\u2039'}
-      </button>
+      <div
+        className="tl-track"
+        ref={trackRef}
+        onClick={onTrackClick}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        {/* Inactive track line */}
+        <div className="tl-rail" />
 
-      <div className="tl-track">
+        {/* Active range highlight */}
         <div
           className="tl-progress"
-          style={{ width: `${(dateIndex / (allDates.length - 1)) * 100}%` }}
+          style={{ left: `${startPct}%`, width: `${endPct - startPct}%` }}
         />
+
+        {/* Date dots */}
         {allDates.map((ord, i) => {
-          const pct = allDates.length === 1 ? 50 : (i / (allDates.length - 1)) * 100;
-          const isActive = i <= dateIndex;
-          const isCurrent = i === dateIndex;
+          const isInRange = i >= startIndex && i <= endIndex;
           return (
-            <button
+            <div
               key={ord}
-              className={`tl-dot${isActive ? ' active' : ''}${isCurrent ? ' current' : ''}`}
-              style={{ left: `${pct}%` }}
-              onClick={() => setDateIndex(i)}
+              className={`tl-dot${isInRange ? ' active' : ''}`}
+              style={{ left: `${pct(i)}%` }}
               title={ordinalToLabel(ord)}
-            >
-              {isCurrent && <span className="tl-label">{ordinalToLabel(ord)}</span>}
-            </button>
+            />
           );
         })}
+
+        {/* Start knob */}
+        <div
+          className="tl-knob tl-knob-start"
+          style={{ left: `${startPct}%` }}
+          onPointerDown={(e) => onPointerDown('start', e)}
+          title={`Start: ${ordinalToLabel(allDates[startIndex])}`}
+        >
+          <span className="tl-knob-label">{ordinalToLabel(allDates[startIndex])}</span>
+        </div>
+
+        {/* End knob */}
+        <div
+          className="tl-knob tl-knob-end"
+          style={{ left: `${endPct}%` }}
+          onPointerDown={(e) => onPointerDown('end', e)}
+          title={`End: ${ordinalToLabel(allDates[endIndex])}`}
+        >
+          <span className="tl-knob-label">{ordinalToLabel(allDates[endIndex])}</span>
+        </div>
       </div>
 
-      <button className="tl-arrow" onClick={goNext} disabled={dateIndex >= allDates.length - 1} aria-label="Next date">
-        {'\u203A'}
-      </button>
-
-      <span className="tl-counter">{ordinalToLabel(allDates[dateIndex])}</span>
+      <span className="tl-counter">
+        {ordinalToLabel(allDates[startIndex])} – {ordinalToLabel(allDates[endIndex])}
+      </span>
     </div>
   );
 }
@@ -193,20 +283,38 @@ function useMarkmapTimeline(
   expandLevel: number,
   onFitRequest: boolean,
   options: { spacingH: number; spacingV: number; maxW: number },
+  externalRange?: TimelineRange | null,
 ) {
   const mmRef = useRef<Markmap | null>(null);
-  const cutoffRef = useRef<number>(Infinity);
+  const rangeRef = useRef<{ start: number; end: number }>({ start: 0, end: Infinity });
   const mountedRef = useRef(false);
 
-  const [dateIndex, setDateIndex] = useState(allDates.length - 1);
+  const initialStart = externalRange?.startOrd != null && allDates.length > 0
+    ? findDateIndex(allDates, externalRange.startOrd)
+    : 0;
+  const initialEnd = externalRange?.endOrd != null && allDates.length > 0
+    ? findDateIndex(allDates, externalRange.endOrd)
+    : allDates.length - 1;
+  const [startIndex, setStartIndex] = useState(initialStart);
+  const [endIndex, setEndIndex] = useState(initialEnd);
 
-  // Reset to last date when dates change
+  // Sync indices when external range or dates change
   useEffect(() => {
-    setDateIndex(allDates.length - 1);
-  }, [allDates]);
+    if (externalRange?.startOrd != null && allDates.length > 0) {
+      setStartIndex(findDateIndex(allDates, externalRange.startOrd));
+    } else {
+      setStartIndex(0);
+    }
+    if (externalRange?.endOrd != null && allDates.length > 0) {
+      setEndIndex(findDateIndex(allDates, externalRange.endOrd));
+    } else {
+      setEndIndex(allDates.length - 1);
+    }
+  }, [allDates, externalRange?.startOrd, externalRange?.endOrd]);
 
-  const currentCutoff = allDates[dateIndex] ?? Infinity;
-  cutoffRef.current = currentCutoff;
+  const currentStart = allDates[startIndex] ?? 0;
+  const currentEnd = allDates[endIndex] ?? Infinity;
+  rangeRef.current = { start: currentStart, end: currentEnd };
 
   // Create markmap (or recreate on expandLevel/fullRoot change)
   useEffect(() => {
@@ -227,13 +335,12 @@ function useMarkmapTimeline(
     const mm = Markmap.create(svgRef.current, derived, fresh);
     mmRef.current = mm;
 
-    // Apply initial date filter after markmap has laid out
-    // Use requestAnimationFrame to let the initial render complete
     requestAnimationFrame(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = (mm as any).state?.data;
-      if (data && cutoffRef.current !== Infinity) {
-        applyDateFilter(data, cutoffRef.current);
+      const r = rangeRef.current;
+      if (data && (r.start > 0 || r.end !== Infinity)) {
+        applyDateFilter(data, r.start, r.end);
         mm.renderData().then(() => mm.fit());
       }
       mountedRef.current = true;
@@ -245,7 +352,7 @@ function useMarkmapTimeline(
     };
   }, [fullRoot, expandLevel, svgRef, options.spacingH, options.spacingV, options.maxW]);
 
-  // On date change (after mount): mutate internal data, animate
+  // On range change (after mount): mutate internal data, animate
   useEffect(() => {
     if (!mountedRef.current) return;
     const mm = mmRef.current;
@@ -255,16 +362,16 @@ function useMarkmapTimeline(
     const data = (mm as any).state?.data;
     if (!data) return;
 
-    applyDateFilter(data, currentCutoff);
+    applyDateFilter(data, currentStart, currentEnd);
     mm.renderData().then(() => mm.fit());
-  }, [currentCutoff]);
+  }, [currentStart, currentEnd]);
 
   // Fit on request
   useEffect(() => {
     if (onFitRequest && mmRef.current) mmRef.current.fit();
   }, [onFitRequest]);
 
-  return { dateIndex, setDateIndex };
+  return { startIndex, endIndex, setStartIndex, setEndIndex };
 }
 
 /* ── Dimension markmap with timeline ───────────── */
@@ -273,18 +380,20 @@ interface MarkmapDimensionViewProps {
   treeData: TreeNode;
   expandLevel: number;
   onFitRequest: boolean;
+  timelineRange?: TimelineRange | null;
+  onTimelineRangeChange?: (range: Partial<TimelineRange>) => void;
 }
 
 const DIM_OPTS = { spacingH: 80, spacingV: 8, maxW: 300 };
 
-export function MarkmapDimensionView({ treeData, expandLevel, onFitRequest }: MarkmapDimensionViewProps) {
+export function MarkmapDimensionView({ treeData, expandLevel, onFitRequest, timelineRange, onTimelineRangeChange }: MarkmapDimensionViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   const allDates = useMemo(() => collectDates(treeData), [treeData]);
   const fullRoot = useMemo(() => jsonToINode(treeData, 0), [treeData]);
 
-  const { dateIndex, setDateIndex } = useMarkmapTimeline(
-    svgRef, fullRoot, allDates, expandLevel, onFitRequest, DIM_OPTS,
+  const { startIndex, endIndex, setStartIndex, setEndIndex } = useMarkmapTimeline(
+    svgRef, fullRoot, allDates, expandLevel, onFitRequest, DIM_OPTS, timelineRange,
   );
 
   return (
@@ -292,7 +401,14 @@ export function MarkmapDimensionView({ treeData, expandLevel, onFitRequest }: Ma
       <div className="map-wrap">
         <svg ref={svgRef} style={{ width: '100%', height: '100%' }} />
       </div>
-      <TimelineBar allDates={allDates} dateIndex={dateIndex} setDateIndex={setDateIndex} />
+      <TimelineBar
+        allDates={allDates}
+        startIndex={startIndex}
+        endIndex={endIndex}
+        setStartIndex={setStartIndex}
+        setEndIndex={setEndIndex}
+        onRangeChange={onTimelineRangeChange}
+      />
     </div>
   );
 }

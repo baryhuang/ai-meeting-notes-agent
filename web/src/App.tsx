@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { SignInButton, SignedIn, SignedOut, useUser } from '@insforge/react';
 import { useAtlasData } from './hooks/useAtlasData';
 import { useWorkspace } from './hooks/useWorkspace';
+import { useTimelineRange } from './hooks/useTimelineCutoff';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { MarkmapDimensionView } from './components/MarkmapView';
@@ -28,6 +29,7 @@ function AuthenticatedApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [buildTab, setBuildTab] = useState<'tree' | 'gantt'>('gantt');
   const [peopleTab, setPeopleTab] = useState<'tree' | 'meetings'>('tree');
+  const [timelineRange, setTimelineRange] = useTimelineRange();
 
   const handleSwitch = useCallback((view: ViewType, dimIndex?: number) => {
     setCurrentView(view);
@@ -93,6 +95,8 @@ function AuthenticatedApp() {
               dimensions={dimensions}
               dimensionsData={dimensionsData}
               onSwitch={handleSwitch}
+              timelineRange={timelineRange}
+              onTimelineRangeChange={setTimelineRange}
             />
           )}
 
@@ -115,20 +119,22 @@ function AuthenticatedApp() {
                 </div>
               )}
               {buildTab === 'gantt' && dimensions[currentDimIndex].id === 'build'
-                ? <SwimGanttView treeData={progressData || dimensionsData[dimensions[currentDimIndex].id]} />
+                ? <SwimGanttView treeData={progressData || dimensionsData[dimensions[currentDimIndex].id]} timelineRange={timelineRange} onTimelineRangeChange={setTimelineRange} />
                 : peopleTab === 'meetings' && dimensions[currentDimIndex].id === 'people-network' && appointmentsData
                 ? <AppointmentsView data={appointmentsData} />
                 : <MarkmapDimensionView
                     treeData={dimensionsData[dimensions[currentDimIndex].id]}
                     expandLevel={expandLevel}
                     onFitRequest={fitRequest}
+                    timelineRange={timelineRange}
+                    onTimelineRangeChange={setTimelineRange}
                   />
               }
             </>
           )}
 
           {currentView === 'competitor' && landscapeData && (
-            <CompetitorView data={landscapeData} />
+            <CompetitorView data={landscapeData} timelineRange={timelineRange} onTimelineRangeChange={setTimelineRange} />
           )}
 
           {currentView === 'partners' && dimensionsData['strategic-partners'] && (

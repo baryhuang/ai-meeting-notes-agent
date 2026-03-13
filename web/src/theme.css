@@ -641,102 +641,119 @@ body::before {
   z-index: 5;
 }
 
-.tl-arrow {
-  width: 32px; height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text2);
-  font-size: 20px; line-height: 1;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0;
-  font-family: var(--font-body);
-}
-.tl-arrow:hover:not(:disabled) {
-  background: var(--green); color: #fff; border-color: var(--green);
-  transform: scale(1.05);
-  box-shadow: 0 2px 8px rgba(45,122,62,0.25);
-}
-.tl-arrow:disabled { opacity: 0.25; cursor: default; }
-
 .tl-track {
-  flex: 1; position: relative; height: 28px;
+  flex: 1; position: relative; height: 40px;
   display: flex; align-items: center;
+  cursor: pointer;
+  touch-action: none;
 }
-.tl-track::before {
-  content: '';
+
+.tl-rail {
   position: absolute; top: 50%; left: 0; right: 0;
-  height: 2px; background: var(--border);
+  height: 3px; background: var(--border);
   transform: translateY(-50%);
-  border-radius: 1px;
+  border-radius: 2px;
+  pointer-events: none;
 }
 
 .tl-progress {
-  position: absolute; top: 50%; left: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--green), var(--teal));
+  position: absolute; top: 50%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--teal), var(--green));
   transform: translateY(-50%);
-  border-radius: 1px;
-  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: left 0.15s ease, width 0.15s ease;
 }
 
+/* Small tick marks for each date */
 .tl-dot {
   position: absolute; top: 50%;
   transform: translate(-50%, -50%);
-  width: 10px; height: 10px;
+  width: 4px; height: 4px;
   border-radius: 50%;
-  border: 2px solid var(--border);
-  background: var(--bg);
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 0;
-  z-index: 2;
+  background: var(--border);
+  pointer-events: none;
+  z-index: 1;
 }
 .tl-dot.active {
-  border-color: var(--green);
-  background: var(--green-light);
-}
-.tl-dot.current {
-  width: 14px; height: 14px;
-  border-color: var(--green);
   background: var(--green);
-  box-shadow: 0 0 0 4px var(--green-light), 0 2px 8px rgba(45,122,62,0.3);
-}
-.tl-dot:hover:not(.current) {
-  width: 12px; height: 12px;
-  border-color: var(--teal);
-  background: var(--teal-light);
+  opacity: 0.5;
 }
 
-.tl-label {
+/* Draggable knobs */
+.tl-knob {
+  position: absolute; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: grab;
+  z-index: 4;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+.tl-knob:active {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+.tl-knob:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.tl-knob-start {
+  background: var(--teal);
+  box-shadow: 0 0 0 3px rgba(42,138,122,0.2), 0 2px 6px rgba(42,138,122,0.3);
+}
+.tl-knob-start:active,
+.tl-knob-start:hover {
+  box-shadow: 0 0 0 5px rgba(42,138,122,0.25), 0 2px 10px rgba(42,138,122,0.4);
+}
+
+.tl-knob-end {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(45,122,62,0.2), 0 2px 6px rgba(45,122,62,0.3);
+}
+.tl-knob-end:active,
+.tl-knob-end:hover {
+  box-shadow: 0 0 0 5px rgba(45,122,62,0.25), 0 2px 10px rgba(45,122,62,0.4);
+}
+
+/* Knob date label (shown on hover/drag) */
+.tl-knob-label {
   position: absolute;
   bottom: calc(100% + 8px); left: 50%;
   transform: translateX(-50%);
   font-size: 10px; font-weight: 600;
   font-family: var(--font-mono);
-  color: var(--green);
   white-space: nowrap;
   background: var(--surface);
   padding: 2px 8px;
   border-radius: 4px;
-  border: 1px solid var(--green-light);
   box-shadow: var(--shadow-sm);
-  animation: tlLabelIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
-@keyframes tlLabelIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+.tl-knob:hover .tl-knob-label,
+.tl-knob:active .tl-knob-label {
+  opacity: 1;
+}
+.tl-knob-start .tl-knob-label {
+  color: var(--teal);
+  border: 1px solid rgba(42,138,122,0.2);
+}
+.tl-knob-end .tl-knob-label {
+  color: var(--green);
+  border: 1px solid var(--green-light);
 }
 
 .tl-counter {
-  font-size: 12px; font-weight: 600;
+  font-size: 11px; font-weight: 600;
   font-family: var(--font-mono);
-  color: var(--green);
-  min-width: 54px; text-align: center;
+  color: var(--text2);
+  min-width: 100px; text-align: center;
   flex-shrink: 0;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 /* ── Markmap overrides ───────────────────────── */
