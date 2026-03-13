@@ -23,8 +23,8 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
     title = 'Vision to Execution';
     desc = 'Strategic vision mapped to execution milestones';
   } else if (currentView === 'competitor') {
-    title = '竞争格局';
-    desc = '竞争对手全景分析';
+    title = 'Competitors';
+    desc = 'Competitive landscape analysis';
   } else if (currentView === 'tasks') {
     title = 'Tasks';
     desc = 'Semantic search across Linear tasks';
