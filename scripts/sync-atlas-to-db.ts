@@ -18,10 +18,10 @@ import { basename, join } from 'path';
 import { flattenTree, type AtlasNodeRow, type TreeNode } from './lib/flatten-tree';
 import { createSnapshot } from './snapshot-atlas';
 
-const DATA_DIR = process.env.ATLAS_DATA_DIR || join(import.meta.dir, '../data/reports/data');
+const DATA_DIR = process.env.ATLAS_DATA_DIR || '/Users/buryhuang/Library/CloudStorage/GoogleDrive-bary@peakmojo.com/Shared drives/Peakmojo/Company Brain';
 const API_KEY = process.env.INSFORGE_API_KEY;
 const BASE_URL = process.env.INSFORGE_BASE_URL || 'https://gx2m4dge.us-east.insforge.app';
-const USER_ID = process.env.ATLAS_USER_ID || '__default__';
+const USER_ID = process.env.ATLAS_USER_ID || '586de5aa-b322-4236-8480-7f5d4ce9c39c';
 
 // These are stored as JSONB blobs in atlas_documents, not as flat nodes
 const DOC_KEYS = new Set(['dimensions', 'landscape', 'appointments-glance']);
@@ -337,11 +337,130 @@ const docCount = await syncDocuments(keys);
 const compCount = await syncCompetitorRows(keys);
 const { inserted, updated, deleted } = await syncNodes(keys);
 
+// ── Propagate changes to all user scopes ──────────────────────────
+// Users get a copy of __default__ on first login. After that, syncs only
+// update __default__. This step backfills any new/changed nodes to all
+// existing user scopes so they stay in sync.
+
+async function propagateToUsers(keys: string[]): Promise<number> {
+  // Find all user_ids that have their own copy (excluding __default__)
+  const userResp = await restFetch(`atlas_nodes?user_id=neq.${USER_ID}&select=user_id&limit=1`, {
+    headers: { 'Accept': 'application/json' },
+  });
+  if (!userResp.ok) return 0;
+
+  const userRows = await userResp.json() as { user_id: string }[];
+  const userIds = [...new Set(userRows.map((r: { user_id: string }) => r.user_id))];
+  if (userIds.length === 0) return 0;
+
+  // For each user, get their full distinct user_id list
+  const allUsersResp = await fetch(`${BASE_URL}/api/database/advance/rawsql`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${API_KEY}`,
+    },
+    body: JSON.stringify({
+      query: `SELECT DISTINCT user_id FROM atlas_nodes WHERE user_id != $1`,
+      params: [USER_ID],
+    }),
+  });
+  if (!allUsersResp.ok) return 0;
+  const allUsersData = await allUsersResp.json() as { rows: { user_id: string }[] };
+  const allUserIds = allUsersData.rows.map((r) => r.user_id);
+  if (allUserIds.length === 0) return 0;
+
+  console.log(`\nPropagating to ${allUserIds.length} user scope(s)...`);
+  let totalPropagated = 0;
+
+  for (const uid of allUserIds) {
+    // Insert missing nodes from __default__ into this user's scope
+    const propResp = await fetch(`${BASE_URL}/api/database/advance/rawsql`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({
+        query: `
+          INSERT INTO atlas_nodes (user_id, dimension, path, parent_path, depth, sort_order, name, status, date, description, quotes, verified, extra, updated_at)
+          SELECT $1, dimension, path, parent_path, depth, sort_order, name, status, date, description, quotes, verified, extra, NOW()
+          FROM atlas_nodes
+          WHERE user_id = $2
+            AND (dimension, path) NOT IN (
+              SELECT dimension, path FROM atlas_nodes WHERE user_id = $1
+            )
+          ON CONFLICT (user_id, dimension, path) DO NOTHING
+        `,
+        params: [uid, USER_ID],
+      }),
+    });
+
+    if (propResp.ok) {
+      const result = await propResp.json() as { rowCount: number };
+      if (result.rowCount > 0) {
+        console.log(`  ${uid}: +${result.rowCount} nodes backfilled`);
+        totalPropagated += result.rowCount;
+      }
+    }
+
+    // Also propagate document updates
+    const docKeys = keys.filter((k) => DOC_KEYS.has(k));
+    for (const docKey of docKeys) {
+      await fetch(`${BASE_URL}/api/database/advance/rawsql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`,
+        },
+        body: JSON.stringify({
+          query: `
+            INSERT INTO atlas_documents (user_id, doc_key, data, updated_at)
+            SELECT $1, doc_key, data, NOW()
+            FROM atlas_documents
+            WHERE user_id = $2 AND doc_key = $3
+            ON CONFLICT (user_id, doc_key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()
+          `,
+          params: [uid, USER_ID, docKey],
+        }),
+      });
+    }
+
+    // Also propagate competitor rows
+    if (keys.includes('landscape')) {
+      await fetch(`${BASE_URL}/api/database/advance/rawsql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`,
+        },
+        body: JSON.stringify({
+          query: `
+            DELETE FROM atlas_competitors WHERE user_id = $1;
+            INSERT INTO atlas_competitors
+            SELECT $1 as user_id, section, best_owner, subcategory, name, website, category,
+                   primary_focus, target_customer, pricing_model, price_range, funding,
+                   serves_cna, serves_rn, uses_ai, key_differentiator, relevance, threat,
+                   transcript_quotes, added_date, sort_order, NOW() as updated_at
+            FROM atlas_competitors WHERE user_id = $2
+          `,
+          params: [uid, USER_ID],
+        }),
+      });
+    }
+  }
+
+  return totalPropagated;
+}
+
+const propagated = await propagateToUsers(keys);
+
 const elapsed = ((performance.now() - start) / 1000).toFixed(2);
 const total = docCount + compCount + inserted + updated + deleted;
 
-if (total > 0) {
-  console.log(`\nDone in ${elapsed}s: ${docCount} docs, ${compCount} competitors, +${inserted} nodes, ~${updated} updated, -${deleted} deleted`);
+if (total > 0 || propagated > 0) {
+  console.log(`\nDone in ${elapsed}s: ${docCount} docs, ${compCount} competitors, +${inserted} nodes, ~${updated} updated, -${deleted} deleted` +
+    (propagated > 0 ? `, ${propagated} propagated to users` : ''));
 } else {
   console.log(`\nNo changes to sync (${elapsed}s)`);
 }
