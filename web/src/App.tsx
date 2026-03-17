@@ -118,7 +118,7 @@ function AuthenticatedApp() {
           )}
 
           {currentView === 'vem' && dimensionsData['vision_execution_map'] && (
-            <VEMDocumentView treeData={dimensionsData['vision_execution_map']} />
+            <VEMDocumentView treeData={dimensionsData['vision_execution_map']} timelineRange={timelineRange} onTimelineRangeChange={setTimelineRange} />
           )}
 
           {currentView === 'd3' && dimensions[currentDimIndex] && dimensionsData[dimensions[currentDimIndex].id] && (

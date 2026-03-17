@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { TreeNode } from '../types';
 import { TimelineBar, collectDates, parseDateOrdinal } from './MarkmapView';
+import { findDateIndex } from '../hooks/useTimelineCutoff';
+import type { TimelineRange } from '../hooks/useTimelineCutoff';
 import './vem-document.css';
 
 function Tag({ status }: { status?: string }) {
@@ -97,15 +99,24 @@ function filterByDate(node: TreeNode, cutoff: number): TreeNode | null {
   return { ...node, children: children.length > 0 ? children : undefined };
 }
 
-export function VEMDocumentView({ treeData }: { treeData: TreeNode }) {
+interface VEMDocumentViewProps {
+  treeData: TreeNode;
+  timelineRange?: TimelineRange | null;
+  onTimelineRangeChange?: (range: Partial<TimelineRange>) => void;
+}
+
+export function VEMDocumentView({ treeData, timelineRange, onTimelineRangeChange }: VEMDocumentViewProps) {
   const allDates = useMemo(() => collectDates(treeData), [treeData]);
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(allDates.length - 1);
 
   useEffect(() => {
-    setStartIndex(0);
-    setEndIndex(allDates.length - 1);
-  }, [allDates]);
+    if (allDates.length === 0) return;
+    setStartIndex(timelineRange?.startOrd != null
+      ? findDateIndex(allDates, timelineRange.startOrd) : 0);
+    setEndIndex(timelineRange?.endOrd != null
+      ? findDateIndex(allDates, timelineRange.endOrd) : allDates.length - 1);
+  }, [timelineRange?.startOrd, timelineRange?.endOrd, allDates]);
 
   const startOrd = allDates[startIndex] ?? 0;
   const endOrd = allDates[endIndex] ?? Infinity;
@@ -152,7 +163,7 @@ export function VEMDocumentView({ treeData }: { treeData: TreeNode }) {
           </tbody>
         </table>
       </div>
-      <TimelineBar allDates={allDates} startIndex={startIndex} endIndex={endIndex} setStartIndex={setStartIndex} setEndIndex={setEndIndex} />
+      <TimelineBar allDates={allDates} startIndex={startIndex} endIndex={endIndex} setStartIndex={setStartIndex} setEndIndex={setEndIndex} onRangeChange={onTimelineRangeChange} />
     </div>
   );
 }

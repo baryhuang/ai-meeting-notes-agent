@@ -57,12 +57,11 @@ export function OverviewView({ dimensions, dimensionsData, onSwitch, timelineRan
   const [endIndex, setEndIndex] = useState(initialEnd);
 
   useEffect(() => {
-    if (timelineRange?.startOrd != null && allDates.length > 0) {
-      setStartIndex(findDateIndex(allDates, timelineRange.startOrd));
-    }
-    if (timelineRange?.endOrd != null && allDates.length > 0) {
-      setEndIndex(findDateIndex(allDates, timelineRange.endOrd));
-    }
+    if (allDates.length === 0) return;
+    setStartIndex(timelineRange?.startOrd != null
+      ? findDateIndex(allDates, timelineRange.startOrd) : 0);
+    setEndIndex(timelineRange?.endOrd != null
+      ? findDateIndex(allDates, timelineRange.endOrd) : allDates.length - 1);
   }, [timelineRange?.startOrd, timelineRange?.endOrd, allDates]);
 
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
