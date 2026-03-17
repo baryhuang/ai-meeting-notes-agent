@@ -143,7 +143,7 @@ function AuthenticatedApp() {
           )}
 
           {currentView === 'okr' && dimensionsData['okr_kpi'] && (
-            <OKRTableView treeData={dimensionsData['okr_kpi']} />
+            <OKRTableView treeData={dimensionsData['okr_kpi']} timelineRange={timelineRange} onTimelineRangeChange={setTimelineRange} />
           )}
 
           {currentView === 'tasks' && (

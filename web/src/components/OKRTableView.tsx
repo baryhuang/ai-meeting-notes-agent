@@ -1,9 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { TreeNode } from '../types';
-import { statusColors } from './MarkmapView';
+import { TimelineBar, parseDateOrdinal } from './MarkmapView';
+import { findDateIndex } from '../hooks/useTimelineCutoff';
+import type { TimelineRange } from '../hooks/useTimelineCutoff';
 
 interface OKRTableViewProps {
   treeData: TreeNode;
+  timelineRange: TimelineRange;
+  onTimelineRangeChange: (range: Partial<TimelineRange>) => void;
+}
+
+/** collectDates variant that includes future dates (OKR is a forward-looking plan) */
+function collectAllDates(node: TreeNode): number[] {
+  const dates: Set<number> = new Set();
+  function walk(n: TreeNode) {
+    const ord = parseDateOrdinal(n.date || '');
+    if (ord !== null) dates.add(ord);
+    (n.children || []).forEach(walk);
+  }
+  walk(node);
+  return Array.from(dates).sort((a, b) => a - b);
 }
 
 /* ── Helpers to read extra fields spread onto TreeNode ── */
@@ -73,6 +89,10 @@ interface WeekAction {
   action: string;
   status: string;
   date?: string;
+  dateOrd: number | null;
+  target_kr: string;
+  actual_kr: string;
+  gaps: string;
 }
 
 interface OKRGroup {
@@ -98,11 +118,16 @@ function extractOKRs(root: TreeNode): { kpiSection: TreeNode | null; expSection:
       for (const sub of child.children || []) {
         if (/^W\d+/i.test(sub.name)) {
           const label = sub.name.replace(/^W\d+:\s*/, '');
+          const extra = sub as unknown as Record<string, unknown>;
           weeks.push({
             week: sub.name.match(/^W\d+/i)?.[0] || sub.name,
             action: label,
             status: sub.status || '',
             date: sub.date || undefined,
+            dateOrd: parseDateOrdinal(sub.date || ''),
+            target_kr: (extra.target_kr as string) || '',
+            actual_kr: (extra.actual_kr as string) || '',
+            gaps: (extra.gaps as string) || '',
           });
         } else {
           kpis.push(sub.name);
@@ -118,20 +143,6 @@ function extractOKRs(root: TreeNode): { kpiSection: TreeNode | null; expSection:
   }
 
   return { kpiSection, expSection, okrs };
-}
-
-/* ── Status pill component ── */
-function StatusPill({ status }: { status: string }) {
-  if (!status) return <span className="okr-status-pill empty">{'\u2014'}</span>;
-  const color = statusColors[status] || '#8a9e8c';
-  return (
-    <span
-      className="okr-status-pill"
-      style={{ background: `${color}18`, color, borderColor: `${color}40` }}
-    >
-      {status}
-    </span>
-  );
 }
 
 function ProvenBadge({ value }: { value: string }) {
@@ -153,11 +164,40 @@ const TAB_CONFIG: { key: OKRTab; label: string }[] = [
 ];
 
 /* ── Main component ── */
-export function OKRTableView({ treeData }: OKRTableViewProps) {
+export function OKRTableView({ treeData, timelineRange, onTimelineRangeChange }: OKRTableViewProps) {
   const { kpiSection, expSection, okrs } = useMemo(() => extractOKRs(treeData), [treeData]);
   const kpiRows = useMemo(() => kpiSection ? extractKPIs(kpiSection) : [], [kpiSection]);
   const expRows = useMemo(() => expSection ? extractExperiments(expSection) : [], [expSection]);
   const [tab, setTab] = useState<OKRTab>('okrs');
+
+  // Timeline
+  const allDates = useMemo(() => collectAllDates(treeData), [treeData]);
+  const [startIndex, setStartIndex] = useState(() =>
+    timelineRange.startOrd !== null ? findDateIndex(allDates, timelineRange.startOrd) : 0
+  );
+  const [endIndex, setEndIndex] = useState(() =>
+    timelineRange.endOrd !== null ? findDateIndex(allDates, timelineRange.endOrd) : allDates.length - 1
+  );
+
+  useEffect(() => {
+    setStartIndex(timelineRange.startOrd !== null ? findDateIndex(allDates, timelineRange.startOrd) : 0);
+    setEndIndex(timelineRange.endOrd !== null ? findDateIndex(allDates, timelineRange.endOrd) : allDates.length - 1);
+  }, [allDates, timelineRange]);
+
+  const startOrd = allDates[startIndex] ?? 0;
+  const endOrd = allDates[endIndex] ?? Infinity;
+
+  // Filter OKR weeks by date range
+  const filteredOkrs = useMemo(() => {
+    if (startOrd === 0 && endOrd === Infinity) return okrs;
+    return okrs.map(g => ({
+      ...g,
+      weeks: g.weeks.filter(w => {
+        if (w.dateOrd === null) return true;
+        return w.dateOrd >= startOrd && w.dateOrd <= endOrd;
+      }),
+    }));
+  }, [okrs, startOrd, endOrd]);
 
   return (
     <div className="okr-table-view">
@@ -178,7 +218,7 @@ export function OKRTableView({ treeData }: OKRTableViewProps) {
         {/* ── OKR's tab ── */}
         {tab === 'okrs' && (
           <>
-            {okrs.map((g, i) => (
+            {filteredOkrs.map((g, i) => (
               <div key={i} className="okr-group">
                 <div className="okr-group-header">
                   <h3>{g.name}</h3>
@@ -190,14 +230,16 @@ export function OKRTableView({ treeData }: OKRTableViewProps) {
                     </div>
                   )}
                 </div>
-                <div className="landscape-table-wrap">
+                <div className="landscape-table-wrap okr-kpi-scroll">
                   <table className="landscape-table okr-table">
                     <thead>
                       <tr>
                         <th>Week</th>
                         <th>Action</th>
-                        <th>Status</th>
                         <th>Date</th>
+                        <th>Target Key Result</th>
+                        <th>Actual Key Result</th>
+                        <th>Gaps / Lessons / Asks</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -206,19 +248,21 @@ export function OKRTableView({ treeData }: OKRTableViewProps) {
                           <tr key={j}>
                             <td className="col-name">{w.week}</td>
                             <td>{w.action}</td>
-                            <td><StatusPill status={w.status} /></td>
                             <td className="okr-date-col">{w.date || '\u2014'}</td>
+                            <td>{w.target_kr || '\u2014'}</td>
+                            <td>{w.actual_kr || '\u2014'}</td>
+                            <td>{w.gaps || '\u2014'}</td>
                           </tr>
                         ))
                       ) : (
-                        <tr><td colSpan={4} className="okr-empty">No weekly entries</td></tr>
+                        <tr><td colSpan={6} className="okr-empty">No weekly entries</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
               </div>
             ))}
-            {okrs.length === 0 && (
+            {filteredOkrs.length === 0 && (
               <div className="okr-empty-state">No OKR data available</div>
             )}
           </>
@@ -307,6 +351,15 @@ export function OKRTableView({ treeData }: OKRTableViewProps) {
         )}
 
       </div>
+
+      <TimelineBar
+        allDates={allDates}
+        startIndex={startIndex}
+        endIndex={endIndex}
+        setStartIndex={setStartIndex}
+        setEndIndex={setEndIndex}
+        onRangeChange={onTimelineRangeChange}
+      />
     </div>
   );
 }
