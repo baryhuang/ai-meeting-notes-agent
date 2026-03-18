@@ -18,6 +18,7 @@ import { OKRTableView } from './components/OKRTableView';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { SettingsView } from './components/SettingsView';
 import { LandingPage } from './components/LandingPage';
+import { ChatWidget } from './components/ChatWidget';
 import type { ViewType } from './types';
 
 function AuthenticatedApp() {
@@ -185,6 +186,7 @@ function AuthenticatedApp() {
 
         </div>
       </div>
+      <ChatWidget />
     </>
   );
 }

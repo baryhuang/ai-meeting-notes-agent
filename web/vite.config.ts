@@ -32,6 +32,12 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/workspace-api': {
+        target: 'https://workspace-endpoint.openagents.org',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/workspace-api/, ''),
+        secure: true,
+      },
     },
   },
 })
