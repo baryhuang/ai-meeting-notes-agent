@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { SignInButton, SignedIn, SignedOut, useUser } from '@insforge/react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useUser } from '@insforge/react';
 import { useAtlasData } from './hooks/useAtlasData';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useTimelineRange } from './hooks/useTimelineCutoff';
@@ -16,6 +17,7 @@ import { PartnersView } from './components/PartnersView';
 import { OKRTableView } from './components/OKRTableView';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { SettingsView } from './components/SettingsView';
+import { LandingPage } from './components/LandingPage';
 import type { ViewType } from './types';
 
 function AuthenticatedApp() {
@@ -187,19 +189,21 @@ function AuthenticatedApp() {
   );
 }
 
+function ProtectedDashboard() {
+  const { user, isLoaded } = useUser();
+  if (!isLoaded) return <div className="loading-screen">Loading...</div>;
+  if (!user) return <Navigate to="/" replace />;
+  return <AuthenticatedApp />;
+}
+
 export default function App() {
   return (
-    <>
-      <SignedOut>
-        <div className="login-screen">
-          <h1>Company Brain</h1>
-          <p>Sign in to explore your strategic decisions</p>
-          <SignInButton />
-        </div>
-      </SignedOut>
-      <SignedIn>
-        <AuthenticatedApp />
-      </SignedIn>
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/dashboard" element={<ProtectedDashboard />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

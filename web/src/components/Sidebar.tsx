@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { UserButton } from '@insforge/react';
+import { Link } from 'react-router-dom';
 import { Settings } from 'lucide-react';
 import type { DimensionMeta, ViewType } from '../types';
 
@@ -69,7 +70,9 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
   return (
     <aside className={`sidebar${open ? ' open' : ''}`}>
       <div className="sidebar-header">
-        <h2 className="logo">{'\u{1F9E0}'} Company Brain</h2>
+        <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <h2 className="logo">{'\u{1F9E0}'} Company Brain</h2>
+        </Link>
         {workspaceName && <div className="sub">{workspaceName}</div>}
         <div className="sub">Feb 23 {'\u2013'} Mar 11, 2026</div>
       </div>
