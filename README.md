@@ -53,7 +53,7 @@ flowchart TD
 
 **Execute** — Tasks sync from Linear into the dashboard. Search across all tasks semantically to find what's relevant.
 
-**See** — Each team member builds their own dashboard. The CEO sees the vision map and fundraise pipeline. The COO sees the facility kanban and pilot tracker. The content lead sees the scenario library. Same data, different views.
+**See** — The UI doesn't matter — each team member vibe-codes their own dashboard. What matters are the primitives underneath: the structured dimensions, the timeline data, the task state. Think of it as an embedded Lovable — shared components built on shared data, but each person organizes and codes their own view. The CEO sees the vision map. The COO sees the operational tracker. Same data, different views, all AI-generated.
 
 ---
 
@@ -79,7 +79,7 @@ flowchart TD
 | **Processing + Chat** | Conversations → structured knowledge; team Q&A | [OpenAgents](https://openagents.com) — hosts Claude Cowork in the cloud, provides admin operation + team chat |
 | **Backend** | Database, auth, storage, API | [InsForge](https://insforge.dev) — AI-native backend |
 | **Execution** | Task sync + semantic search | Linear → InsForge (edge function) |
-| **Visualization** | Per-user dashboards | React components, vibe-coded |
+| **Visualization** | Per-user dashboards, vibe-coded by each team member | React primitives + shared components — **help wanted** |
 
 ---
 
@@ -130,6 +130,16 @@ docker compose up -d
 ```
 
 Runs anywhere Docker runs — a $5 VPS, a Raspberry Pi, or your laptop. No inbound ports needed.
+
+---
+
+## Help wanted
+
+The processing → backend → data pipeline works. What's missing is the **visualization layer** — the part where each team member gets their own vibe-coded dashboard.
+
+The vision: an embeddable UI framework where the primitives (dimension trees, timelines, task views, competitor landscapes) are shared components, but each person assembles and customizes their own view using AI code generation. Not a fixed dashboard — a personal operating surface that each team member codes to fit how they think.
+
+If you're interested in building this layer — React components, AI-assisted UI generation, or the glue between structured data and personalized dashboards — open an issue or reach out.
 
 ---
 
