@@ -130,14 +130,15 @@ Get started with just two free API keys: [Telegram BotFather](https://t.me/BotFa
 
 ---
 
-## Deploy
+## Critical TODOs
 
-**Docker** (any server):
-```bash
-docker compose up -d
-```
+1. **Company Brain must sync to a shared location.** The Company Brain directory (`company-os/`) currently lives locally. It needs to be synced to a shared, accessible location (S3 or Google Drive) so that all processing agents and team members operate on the same source of truth.
 
-Runs anywhere Docker runs — a $5 VPS, a Raspberry Pi, or your laptop. No inbound ports needed.
+2. **`by-dates/` and Company Brain must auto-sync to local.** Meeting transcripts (`by-dates/`) and the Company Brain should automatically sync down to the local workspace — not require manual pulls. This is the prerequisite for any automated processing pipeline to work reliably.
+
+3. **Chat-initiated updates must trigger Claude Code to update the database.** When a user requests changes through the agent chat (e.g., "mark task X as done", "process today's new recordings"), the agent should execute the actual operations — updating task status in the DB, running `upload_brain.py` for new files, etc. Currently the chat is read-only against the knowledge base; it needs write-back capability.
+
+4. **Replace skills with a context layer.** The current Claude Cowork agent uses a skill-based architecture (company-brain, social-media, xlsx, pptx, pdf, etc.) where each skill has its own SKILL.md and the agent must find and read the right skill file before acting. This should be replaced with a **context layer** — instead of discrete skills the agent switches between, provide a unified context that includes the Company Brain structure, file locations, database schema, and available operations. The agent should always have the right context loaded, not need to "discover" it per-task.
 
 ---
 
