@@ -72,12 +72,10 @@ export function parseDateOrdinal(dateStr: string): number | null {
 }
 
 export function collectDates(node: TreeNode): number[] {
-  const now = new Date();
-  const todayOrd = (now.getMonth() + 1) * 100 + now.getDate();
   const dates: Set<number> = new Set();
   function walk(n: TreeNode) {
     const ord = parseDateOrdinal(n.date || '');
-    if (ord !== null && ord <= todayOrd) dates.add(ord);
+    if (ord !== null) dates.add(ord);
     (n.children || []).forEach(walk);
   }
   walk(node);
