@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { MessageCircle, X, Maximize2, Minimize2, Send, Brain, Wrench, Activity, Pencil, Eye, Terminal, Search, ChevronRight, RefreshCw } from 'lucide-react';
+import { MessageCircle, X, Maximize2, Minimize2, Send, Brain, Wrench, Activity, Pencil, Eye, Terminal, Search, ChevronRight, RefreshCw, Plus } from 'lucide-react';
+import { loadChatThread, saveChatThread, deleteChatThread } from '../api';
+import type { ChatThreadData } from '../api';
 import './ChatWidget.css';
 
 const WORKSPACE_URL = import.meta.env.VITE_OPENAGENTS_WORKSPACE_URL || '';
@@ -252,9 +254,10 @@ function getAgentInitials(name: string): string {
 interface ChatWidgetProps {
   isOpen?: boolean;
   onToggle?: (open: boolean) => void;
+  userId: string;
 }
 
-export function ChatWidget({ isOpen: controlledOpen, onToggle }: ChatWidgetProps = {}) {
+export function ChatWidget({ isOpen: controlledOpen, onToggle, userId }: ChatWidgetProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setIsOpen = useCallback((open: boolean) => {
@@ -271,8 +274,9 @@ export function ChatWidget({ isOpen: controlledOpen, onToggle }: ChatWidgetProps
   const lastSeenIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const savePendingRef = useRef(false);
+  const masterAgentRef = useRef<string | undefined>(undefined);
 
   const config = parseWorkspaceUrl(WORKSPACE_URL);
 
@@ -288,20 +292,24 @@ export function ChatWidget({ isOpen: controlledOpen, onToggle }: ChatWidgetProps
     }
   }, [isOpen]);
 
-  // Track user activity for adaptive polling
-  useEffect(() => {
-    const onActivity = () => { lastActivityRef.current = Date.now(); };
-    window.addEventListener('keydown', onActivity);
-    window.addEventListener('click', onActivity);
-    return () => {
-      window.removeEventListener('keydown', onActivity);
-      window.removeEventListener('click', onActivity);
-    };
-  }, []);
+  // Persist thread to DB (debounced — only saves when savePendingRef is set)
+  const persistThread = useCallback(async () => {
+    if (!userId || !channelName) return;
+    try {
+      await saveChatThread(userId, {
+        channelName,
+        lastSeenId: lastSeenIdRef.current,
+        masterAgent: masterAgentRef.current,
+        createdAt: Date.now(),
+      });
+    } catch (err) {
+      console.error('Failed to persist chat thread:', err);
+    }
+  }, [userId, channelName]);
 
-  // Discover online agents, then create a channel with them as participants
-  const initChannel = useCallback(async () => {
-    if (!config || channelName) return;
+  // Create a brand-new channel (used on first open or "New Chat")
+  const createNewChannel = useCallback(async () => {
+    if (!config) return;
     setInitializing(true);
     try {
       let agentNames: string[] = DEFAULT_AGENT ? [DEFAULT_AGENT] : [];
@@ -341,13 +349,64 @@ export function ChatWidget({ isOpen: controlledOpen, onToggle }: ChatWidgetProps
         },
       );
       const name = (event as any).metadata?.channel_name || '';
-      if (name) setChannelName(name);
+      if (name) {
+        masterAgentRef.current = master;
+        setChannelName(name);
+        lastSeenIdRef.current = null;
+        // Persist immediately
+        try {
+          await saveChatThread(userId, {
+            channelName: name,
+            lastSeenId: null,
+            masterAgent: master,
+            createdAt: Date.now(),
+          });
+        } catch (err) {
+          console.error('Failed to persist new chat thread:', err);
+        }
+      }
     } catch (err) {
       console.error('Failed to create chat channel:', err);
     } finally {
       setInitializing(false);
     }
-  }, [config, channelName]);
+  }, [config, userId]);
+
+  // Load saved thread or create new one
+  const initChannel = useCallback(async () => {
+    if (!config || channelName) return;
+    setInitializing(true);
+    try {
+      const saved = await loadChatThread(userId);
+      if (saved && saved.channelName) {
+        setChannelName(saved.channelName);
+        lastSeenIdRef.current = saved.lastSeenId;
+        masterAgentRef.current = saved.masterAgent;
+        setInitializing(false);
+        return;
+      }
+    } catch {
+      // No saved thread, create new
+    }
+    setInitializing(false);
+    await createNewChannel();
+  }, [config, channelName, userId, createNewChannel]);
+
+  // Handle "New Chat" — clear everything and create fresh channel
+  const handleNewChat = useCallback(async () => {
+    // Clear local state
+    setChannelName(null);
+    setMessages([]);
+    setWaitingForAgent(false);
+    lastSeenIdRef.current = null;
+    masterAgentRef.current = undefined;
+    // Clear persisted thread
+    try {
+      await deleteChatThread(userId);
+    } catch { /* ignore */ }
+    // Create new channel
+    await createNewChannel();
+  }, [userId, createNewChannel]);
 
   // Poll for messages
   const poll = useCallback(async () => {
@@ -380,6 +439,7 @@ export function ChatWidget({ isOpen: controlledOpen, onToggle }: ChatWidgetProps
         });
 
         lastSeenIdRef.current = newMsgs[newMsgs.length - 1].id;
+        savePendingRef.current = true;
 
         setMessages((prev) => {
           const ids = new Set(prev.map((m) => m.id));
@@ -401,23 +461,20 @@ export function ChatWidget({ isOpen: controlledOpen, onToggle }: ChatWidgetProps
     }
   }, [config, channelName]);
 
-  // Adaptive polling loop
+  // Fixed 5s polling loop
   useEffect(() => {
     if (!isOpen || !channelName) return;
     poll();
-    const getDelay = () => {
-      const idle = Date.now() - lastActivityRef.current;
-      return idle > 60_000 ? 15_000 : 2_000;
-    };
-    const schedule = () => {
-      pollTimerRef.current = setTimeout(async () => {
-        await poll();
-        schedule();
-      }, getDelay());
-    };
-    schedule();
-    return () => { if (pollTimerRef.current) clearTimeout(pollTimerRef.current); };
-  }, [isOpen, channelName, poll]);
+    pollTimerRef.current = setInterval(async () => {
+      await poll();
+      // Persist lastSeenId if new messages arrived
+      if (savePendingRef.current) {
+        savePendingRef.current = false;
+        persistThread();
+      }
+    }, 5000);
+    return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); };
+  }, [isOpen, channelName, poll, persistThread]);
 
   // Init channel when panel opens (covers both FAB click and external toggle)
   useEffect(() => {
@@ -508,6 +565,9 @@ export function ChatWidget({ isOpen: controlledOpen, onToggle }: ChatWidgetProps
           <div className="chat-panel-header">
             <span className="chat-panel-title">Agent Chat</span>
             <div className="chat-panel-actions">
+              <button className="chat-header-btn" onClick={handleNewChat} title="New Chat">
+                <Plus size={14} />
+              </button>
               <button className="chat-header-btn" onClick={() => setIsFullscreen(!isFullscreen)}
                 title={isFullscreen ? 'Minimize' : 'Fullscreen'}>
                 {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}

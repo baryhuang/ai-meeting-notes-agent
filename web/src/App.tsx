@@ -180,7 +180,7 @@ function AuthenticatedApp() {
 
         </div>
       </div>
-      <ChatWidget isOpen={chatOpen} onToggle={setChatOpen} />
+      <ChatWidget isOpen={chatOpen} onToggle={setChatOpen} userId={userId} />
     </>
   );
 }

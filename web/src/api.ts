@@ -36,6 +36,56 @@ async function dbSelectNodes(userId: string, dimension: string): Promise<TreeNod
   return assembleTree(data as Parameters<typeof assembleTree>[0]);
 }
 
+async function dbUpsert(userId: string, docKey: string, data: unknown): Promise<void> {
+  const { error } = await insforge.database
+    .from(DOC_TABLE)
+    .upsert(
+      { user_id: userId, doc_key: docKey, data },
+      { onConflict: 'user_id,doc_key' },
+    );
+  if (error) throw new Error(`DB upsert failed [${docKey}]: ${error.message}`);
+}
+
+async function dbSelectOptional<T>(userId: string, docKey: string): Promise<T | null> {
+  const { data, error } = await insforge.database
+    .from(DOC_TABLE)
+    .select('data')
+    .eq('user_id', userId)
+    .eq('doc_key', docKey)
+    .single();
+
+  if (error || !data) return null;
+  return (data as { data: T }).data;
+}
+
+// ── Chat thread persistence ───────────────────────────────────────
+
+export interface ChatThreadData {
+  channelName: string;
+  lastSeenId: string | null;
+  masterAgent: string | undefined;
+  createdAt: number;
+}
+
+const CHAT_THREAD_KEY = 'chat_thread';
+
+export async function loadChatThread(userId: string): Promise<ChatThreadData | null> {
+  return dbSelectOptional<ChatThreadData>(userId, CHAT_THREAD_KEY);
+}
+
+export async function saveChatThread(userId: string, data: ChatThreadData): Promise<void> {
+  return dbUpsert(userId, CHAT_THREAD_KEY, data);
+}
+
+export async function deleteChatThread(userId: string): Promise<void> {
+  const { error } = await insforge.database
+    .from(DOC_TABLE)
+    .delete()
+    .eq('user_id', userId)
+    .eq('doc_key', CHAT_THREAD_KEY);
+  if (error) throw new Error(`DB delete failed [${CHAT_THREAD_KEY}]: ${error.message}`);
+}
+
 // ── Public API ─────────────────────────────────────────────────────
 
 // No default data initialization — each user's data is managed via sync scripts
