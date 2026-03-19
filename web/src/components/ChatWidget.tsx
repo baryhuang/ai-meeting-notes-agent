@@ -4,9 +4,10 @@ import './ChatWidget.css';
 
 const WORKSPACE_URL = import.meta.env.VITE_OPENAGENTS_WORKSPACE_URL || '';
 const DEFAULT_AGENT = import.meta.env.VITE_OPENAGENTS_AGENT_NAME || '';
+const INSFORGE_BASE = import.meta.env.VITE_INSFORGE_BASE_URL || '';
 const API_BASE = import.meta.env.DEV
   ? '/workspace-api'
-  : 'https://workspace-endpoint.openagents.org';
+  : `${INSFORGE_BASE}/functions/workspace-proxy`;
 
 // ── Types ──
 
@@ -213,9 +214,30 @@ async function apiRequest<T>(
   config: ParsedConfig,
   options: RequestInit = {},
 ): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (config.token) headers['X-Workspace-Token'] = config.token;
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res: Response;
+
+  if (import.meta.env.DEV) {
+    // Dev: Vite proxy forwards path directly
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (config.token) headers['X-Workspace-Token'] = config.token;
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } else {
+    // Prod: POST to edge function proxy with wrapped payload
+    const proxyBody: Record<string, unknown> = {
+      method: options.method || 'GET',
+      path,
+      workspaceToken: config.token,
+    };
+    if (options.body) {
+      proxyBody.body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+    }
+    res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(proxyBody),
+    });
+  }
+
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   const json = await res.json();
   return json.data;
@@ -397,9 +419,13 @@ export function ChatWidget({ isOpen: controlledOpen, onToggle }: ChatWidgetProps
     return () => { if (pollTimerRef.current) clearTimeout(pollTimerRef.current); };
   }, [isOpen, channelName, poll]);
 
+  // Init channel when panel opens (covers both FAB click and external toggle)
+  useEffect(() => {
+    if (isOpen && !channelName && !initializing) initChannel();
+  }, [isOpen, channelName, initializing, initChannel]);
+
   const handleOpen = () => {
     setIsOpen(true);
-    if (!channelName) initChannel();
   };
 
   const handleSend = async () => {
