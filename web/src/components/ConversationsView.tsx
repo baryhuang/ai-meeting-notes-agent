@@ -8,8 +8,10 @@ interface ConversationsViewProps {
 }
 
 /** Extract individual filenames from the raw field (handles "cat f1 f2", JSON arrays, single files) */
-function parseRawFiles(raw: string | undefined): string[] {
+function parseRawFiles(raw: unknown): string[] {
   if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter((f): f is string => typeof f === 'string');
+  if (typeof raw !== 'string') return [];
   // "cat file1.txt file2.txt" → strip cat prefix, split by space
   if (raw.startsWith('cat ')) {
     return raw.slice(4).trim().split(/\s+/).filter(f => f.endsWith('.txt') || f.endsWith('.vtt'));
@@ -71,8 +73,9 @@ function FileButton({ filename, date, label, icon }: { filename: string; date: s
 }
 
 function ConversationFiles({ node, date }: { node: TreeNode; date: string }) {
-  const raw = (node as any).raw as string | undefined;
-  const notes = (node as any).notes as string[] | undefined;
+  const raw = (node as any).raw;
+  const notesRaw = (node as any).notes;
+  const notes: string[] | undefined = typeof notesRaw === 'string' ? [notesRaw] : Array.isArray(notesRaw) ? notesRaw : undefined;
   const rawFiles = parseRawFiles(raw);
 
   if (rawFiles.length === 0 && (!notes || notes.length === 0)) return null;
