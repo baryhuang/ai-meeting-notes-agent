@@ -28,8 +28,17 @@ def parse_index_md(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         lines = f.readlines()
 
+    # Extract title from first # heading (used as synthetic root name if needed)
+    title = None
+    for line in lines:
+        hm = re.match(r'^#\s+(.+)$', line)
+        if hm:
+            title = hm.group(1).strip()
+            break
+
     # Stack-based parser: (depth, node)
     root = None
+    root_depth = 0
     stack = []  # [(depth, node), ...]
     last_node = None
     last_node_depth = 0
@@ -61,6 +70,8 @@ def parse_index_md(filepath):
 
             if root is None:
                 root = node
+                root_depth = depth
+                wrapped = False
                 stack = [(depth, root)]
             else:
                 # Pop stack to find parent
@@ -70,6 +81,13 @@ def parse_index_md(filepath):
                 if stack:
                     parent = stack[-1][1]
                     parent["children"].append(node)
+                elif depth == root_depth:
+                    # Sibling at root level — wrap in synthetic root
+                    if not wrapped:
+                        root = {"name": title or os.path.basename(dim_dir), "children": [root, node]}
+                        wrapped = True
+                    else:
+                        root["children"].append(node)
 
                 stack.append((depth, node))
 
@@ -99,12 +117,18 @@ def _load_detail_files(node, dim_dir):
     if "file" in node:
         detail_path = os.path.join(dim_dir, node["file"])
         if os.path.exists(detail_path):
-            detail = _parse_detail_md(detail_path)
-            # Merge detail into node (detail file takes priority over inline desc)
-            if "desc" in detail:
-                node["desc"] = detail["desc"]
-            if "quotes" in detail:
-                node["quotes"] = detail["quotes"]
+            if detail_path.endswith("_index.md"):
+                # Nested _index.md → parse as sub-tree and merge children
+                sub_tree = parse_index_md(detail_path)
+                if sub_tree and sub_tree.get("children"):
+                    node["children"] = sub_tree["children"]
+            else:
+                detail = _parse_detail_md(detail_path)
+                # Merge detail into node (detail file takes priority over inline desc)
+                if "desc" in detail:
+                    node["desc"] = detail["desc"]
+                if "quotes" in detail:
+                    node["quotes"] = detail["quotes"]
 
     for child in node.get("children", []):
         _load_detail_files(child, dim_dir)

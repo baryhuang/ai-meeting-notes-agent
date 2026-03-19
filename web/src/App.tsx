@@ -18,6 +18,7 @@ import { OKRTableView } from './components/OKRTableView';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { SettingsView } from './components/SettingsView';
 import { LandingPage } from './components/LandingPage';
+import { ConversationsView } from './components/ConversationsView';
 import { ChatWidget } from './components/ChatWidget';
 import type { ViewType } from './types';
 
@@ -25,7 +26,7 @@ function AuthenticatedApp() {
   const { user } = useUser();
   const { workspace, workspaces, loading: wsLoading, needsPicker, selectWorkspace } = useWorkspace(user ?? null);
   const userId = workspace?.ownerId ?? user!.id;
-  const { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, loading, error } = useAtlasData(userId);
+  const { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, loading, error } = useAtlasData(userId);
   const [currentView, setCurrentView] = useState<ViewType>('todo');
   const [currentDimIndex, setCurrentDimIndex] = useState(0);
   const [expandLevel, setExpandLevel] = useState(-1);
@@ -119,6 +120,10 @@ function AuthenticatedApp() {
 
           {currentView === 'todo' && tasksData && (
             <TodoView treeData={tasksData} timelineRange={timelineRange} onTimelineRangeChange={setTimelineRange} />
+          )}
+
+          {currentView === 'conversations' && conversationsData && (
+            <ConversationsView treeData={conversationsData} />
           )}
 
           {currentView === 'vem' && dimensionsData['vision_execution_map'] && (

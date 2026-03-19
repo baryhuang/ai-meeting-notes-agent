@@ -182,7 +182,8 @@ def _save_file(s3_client, s3_bucket: str | None, prefix: str, filename: str, dat
     # Also upload to S3 if configured
     if s3_client and s3_bucket:
         key = f"{prefix}/{filename}"
-        s3_client.put_object(Bucket=s3_bucket, Key=key, Body=body)
+        content_type = 'text/plain; charset=utf-8' if isinstance(data, str) else 'application/octet-stream'
+        s3_client.put_object(Bucket=s3_bucket, Key=key, Body=body, ContentType=content_type)
         logger.info(f"Uploaded to s3://{s3_bucket}/{key}")
 
         # Trigger Bubble Lab webhook to sync file to Google Drive

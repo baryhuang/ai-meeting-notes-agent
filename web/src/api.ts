@@ -86,6 +86,17 @@ export async function deleteChatThread(userId: string): Promise<void> {
   if (error) throw new Error(`DB delete failed [${CHAT_THREAD_KEY}]: ${error.message}`);
 }
 
+// ── S3 file access ────────────────────────────────────────────────
+
+const PRESIGN_URL = `${import.meta.env.VITE_INSFORGE_BASE_URL}/functions/s3-presign`;
+
+export async function getS3PresignedUrl(s3Key: string, mode: 'view' | 'download' = 'view'): Promise<string> {
+  const res = await fetch(`${PRESIGN_URL}?key=${encodeURIComponent(s3Key)}&mode=${mode}`);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json.url;
+}
+
 // ── Public API ─────────────────────────────────────────────────────
 
 // No default data initialization — each user's data is managed via sync scripts

@@ -9,6 +9,7 @@ interface AtlasData {
   progressData: TreeNode | null;
   appointmentsData: AppointmentsData | null;
   tasksData: TreeNode | null;
+  conversationsData: TreeNode | null;
   loading: boolean;
   error: string | null;
 }
@@ -20,6 +21,7 @@ export function useAtlasData(userId: string): AtlasData {
   const [progressData, setProgressData] = useState<TreeNode | null>(null);
   const [appointmentsData, setAppointmentsData] = useState<AppointmentsData | null>(null);
   const [tasksData, setTasksData] = useState<TreeNode | null>(null);
+  const [conversationsData, setConversationsData] = useState<TreeNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +47,7 @@ export function useAtlasData(userId: string): AtlasData {
         fetchProgressData(userId).then(data => ({ id: '__progress__', data })).catch(() => ({ id: '__progress__', data: null })),
         fetchAppointmentsData(userId).then(data => ({ id: '__appointments__', data })).catch(() => ({ id: '__appointments__', data: null })),
         fetchDimensionData(userId, 'tasks').then(data => ({ id: '__tasks__', data })).catch(() => ({ id: '__tasks__', data: null })),
+        fetchDimensionData(userId, 'conversations').then(data => ({ id: '__conversations__', data })).catch(() => ({ id: '__conversations__', data: null })),
       ]);
 
       if (cancelled) return;
@@ -59,6 +62,8 @@ export function useAtlasData(userId: string): AtlasData {
           setAppointmentsData(r.data as AppointmentsData);
         } else if (r.id === '__tasks__') {
           setTasksData(r.data as TreeNode);
+        } else if (r.id === '__conversations__') {
+          setConversationsData(r.data as TreeNode);
         } else if (r.data) {
           dataMap[r.id] = r.data as TreeNode;
         }
@@ -82,5 +87,5 @@ export function useAtlasData(userId: string): AtlasData {
     return () => { cancelled = true; };
   }, [userId]);
 
-  return { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, loading, error };
+  return { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, loading, error };
 }
