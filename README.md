@@ -140,15 +140,9 @@ Get started with just two free API keys: [Telegram BotFather](https://t.me/BotFa
 
 4. **Replace skills with a context layer.** The current Claude Cowork agent uses a skill-based architecture (company-brain, social-media, xlsx, pptx, pdf, etc.) where each skill has its own SKILL.md and the agent must find and read the right skill file before acting. This should be replaced with a **context layer** — instead of discrete skills the agent switches between, provide a unified context that includes the Company Brain structure, file locations, database schema, and available operations. The agent should always have the right context loaded, not need to "discover" it per-task.
 
----
+5. **Auto-deploy OpenAgents workspace.** The OpenAgents workspace (Claude Cowork cloud agent) currently requires manual deployment. This should be automated — when the Company Brain, CLAUDE.md, or agent configuration changes, the workspace should redeploy automatically so the chat agent always reflects the latest context and capabilities.
 
-## Help wanted
-
-The processing → backend → data pipeline works. What's missing is the **visualization layer** — the part where each team member gets their own vibe-coded dashboard.
-
-The vision: an embeddable UI framework where the primitives (dimension trees, timelines, task views, competitor landscapes) are shared components, but each person assembles and customizes their own view using AI code generation. Not a fixed dashboard — a personal operating surface that each team member codes to fit how they think.
-
-If you're interested in building this layer — React components, AI-assisted UI generation, or the glue between structured data and personalized dashboards — open an issue or reach out.
+6. **Embeddable per-user visualization layer.** The processing → backend → data pipeline works. What's missing is a UI framework where the primitives (dimension trees, timelines, task views, competitor landscapes) are shared components, but each team member assembles and customizes their own view using AI code generation. Not a fixed dashboard — a personal operating surface that each person vibe-codes to fit how they think.
 
 ---
 
