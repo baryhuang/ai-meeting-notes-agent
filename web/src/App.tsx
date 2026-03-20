@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useUser } from '@insforge/react';
+import { useUser, SignInButton } from '@insforge/react';
 import { useAtlasData } from './hooks/useAtlasData';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useTimelineRange } from './hooks/useTimelineCutoff';
@@ -94,8 +94,9 @@ function AuthenticatedApp() {
 
   return (
     <>
+      <ElectronDragBar />
       <div className={`sidebar-backdrop${sidebarOpen ? ' visible' : ''}`} onClick={() => setSidebarOpen(false)} />
-      <div className="app">
+      <div className={`app${isElectron ? ' layout-main' : ''}`}>
         <Sidebar
           dimensions={dimensions}
           currentView={currentView}
@@ -186,10 +187,44 @@ function AuthenticatedApp() {
   );
 }
 
+const isElectron = !!window.electronAPI;
+
+function ElectronDragBar() {
+  if (!isElectron) return null;
+  return (
+    <div
+      className="app-drag-region"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 28,
+        zIndex: 1000,
+        backgroundColor: 'transparent',
+      }}
+    />
+  );
+}
+
 function ProtectedDashboard() {
   const { user, isLoaded } = useUser();
-  if (!isLoaded) return <div className="loading-screen">Loading...</div>;
-  if (!user) return <Navigate to="/" replace />;
+  if (!isLoaded) return (<><ElectronDragBar /><div className="loading-screen">Loading...</div></>);
+  if (!user) {
+    if (isElectron) {
+      return (
+        <>
+          <ElectronDragBar />
+          <div className="loading-screen" style={{ flexDirection: 'column', gap: 24 }}>
+            <h2 style={{ margin: 0, fontWeight: 600 }}>Company OS</h2>
+            <p style={{ margin: 0, opacity: 0.6 }}>Sign in to access your dashboard</p>
+            <SignInButton className="settings-btn primary">Sign In</SignInButton>
+          </div>
+        </>
+      );
+    }
+    return <Navigate to="/" replace />;
+  }
   return <AuthenticatedApp />;
 }
 
@@ -197,7 +232,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={isElectron ? <ProtectedDashboard /> : <LandingPage />} />
         <Route path="/dashboard" element={<ProtectedDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

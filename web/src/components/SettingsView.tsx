@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchWorkspaceMembers, addWorkspaceMember, removeWorkspaceMember, updateWorkspaceName } from '../api';
 import type { Workspace, WorkspaceMember } from '../types';
+import { getElectronSettings } from '../insforge';
 
 interface SettingsViewProps {
   workspace: Workspace;
@@ -15,6 +16,46 @@ export function SettingsView({ workspace, workspaces, onSelectWorkspace }: Setti
   const [nameValue, setNameValue] = useState(workspace.name);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Electron backend settings
+  const isElectron = !!window.electronAPI;
+  const [backendUrl, setBackendUrl] = useState('');
+  const [anonKey, setAnonKey] = useState('');
+  const [workspaceUrl, setWorkspaceUrl] = useState('');
+  const [agentName, setAgentName] = useState('');
+  const [backendSaving, setBackendSaving] = useState(false);
+  const [backendSaved, setBackendSaved] = useState(false);
+
+  useEffect(() => {
+    if (isElectron) {
+      const s = getElectronSettings();
+      if (s) {
+        setBackendUrl(s.backendUrl || '');
+        setAnonKey(s.anonKey || '');
+        setWorkspaceUrl(s.workspaceUrl || '');
+        setAgentName(s.agentName || '');
+      }
+    }
+  }, [isElectron]);
+
+  const handleSaveBackend = async () => {
+    if (!window.electronAPI) return;
+    setBackendSaving(true);
+    try {
+      await window.electronAPI.settings.saveSettings({
+        backendUrl,
+        anonKey,
+        workspaceUrl,
+        agentName,
+      });
+      setBackendSaved(true);
+      setTimeout(() => setBackendSaved(false), 5000);
+    } catch {
+      setError('Failed to save backend settings');
+    } finally {
+      setBackendSaving(false);
+    }
+  };
 
   const loadMembers = useCallback(async () => {
     try {
@@ -77,6 +118,65 @@ export function SettingsView({ workspace, workspaces, onSelectWorkspace }: Setti
     <div className="settings-view">
       <div className="settings-scroll">
         {error && <div className="ai-query-error">{error}</div>}
+
+        {/* Backend settings (Electron only) */}
+        {isElectron && (
+          <div className="settings-section">
+            <div className="settings-section-title">Backend</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                InsForge Base URL
+                <input
+                  className="task-search-input"
+                  value={backendUrl}
+                  onChange={e => setBackendUrl(e.target.value)}
+                  placeholder="https://..."
+                  style={{ marginTop: 4 }}
+                />
+              </label>
+              <label style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                Anon Key
+                <input
+                  className="task-search-input"
+                  value={anonKey}
+                  onChange={e => setAnonKey(e.target.value)}
+                  placeholder="eyJ..."
+                  style={{ marginTop: 4 }}
+                />
+              </label>
+              <label style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                Workspace URL
+                <input
+                  className="task-search-input"
+                  value={workspaceUrl}
+                  onChange={e => setWorkspaceUrl(e.target.value)}
+                  placeholder="https://workspace.openagents.org/..."
+                  style={{ marginTop: 4 }}
+                />
+              </label>
+              <label style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                Agent Name
+                <input
+                  className="task-search-input"
+                  value={agentName}
+                  onChange={e => setAgentName(e.target.value)}
+                  placeholder="os-agent"
+                  style={{ marginTop: 4 }}
+                />
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button className="settings-btn primary" onClick={handleSaveBackend} disabled={backendSaving}>
+                  {backendSaving ? 'Saving...' : 'Save'}
+                </button>
+                {backendSaved && (
+                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                    Saved. Reload the app for changes to take effect.
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Workspace name */}
         <div className="settings-section">

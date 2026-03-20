@@ -23,6 +23,7 @@ function serveAtlasData() {
 
 export default defineConfig({
   plugins: [react(), serveAtlasData()],
+  base: './',
   build: {
     outDir: 'dist',
   },

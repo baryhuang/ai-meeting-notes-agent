@@ -205,29 +205,53 @@ function SectionItems({ items, onStatusChange }: { items: FlatItem[]; onStatusCh
 function ItemRow({ item, onStatusChange }: { item: FlatItem; onStatusChange: (node: TreeNode, newStatus: string) => void }) {
   const { node, category } = item;
   const owner = node.owner as string | undefined;
+  const due = (node as any).due as string | undefined;
+  const file = (node as any).file as string | undefined;
   const currentStatus = node.status || 'partial';
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = node.desc || due || file;
 
   return (
-    <tr className={`todo-table-row${isDone(node) ? ' done' : ''}`}>
-      <td className="todo-table-status">
-        <div className="todo-status-wrapper">
-          <StatusIcon status={currentStatus} />
-          <select
-            className="todo-status-overlay"
-            value={currentStatus}
-            onChange={(e) => onStatusChange(node, e.target.value)}
-          >
-            {STATUS_CYCLE.map((s) => (
-              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-            ))}
-          </select>
-        </div>
-      </td>
-      <td className="todo-table-name">{node.name}</td>
-      <td className="todo-table-tag"><span className="todo-tag-chip">{category}</span></td>
-      <td className="todo-table-owner">{owner && <span><User size={12} /> {owner}</span>}</td>
-      <td className="todo-table-date">{node.date || ''}</td>
-    </tr>
+    <>
+      <tr
+        className={`todo-table-row${isDone(node) ? ' done' : ''}${hasDetails ? ' clickable' : ''}${expanded ? ' expanded' : ''}`}
+        onClick={() => hasDetails && setExpanded(!expanded)}
+      >
+        <td className="todo-table-status">
+          <div className="todo-status-wrapper">
+            <StatusIcon status={currentStatus} />
+            <select
+              className="todo-status-overlay"
+              value={currentStatus}
+              onChange={(e) => { e.stopPropagation(); onStatusChange(node, e.target.value); }}
+            >
+              {STATUS_CYCLE.map((s) => (
+                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+              ))}
+            </select>
+          </div>
+        </td>
+        <td className="todo-table-name">
+          {node.name}
+          {hasDetails && <ChevronRight size={12} className={`todo-row-chevron${expanded ? ' expanded' : ''}`} />}
+        </td>
+        <td className="todo-table-tag"><span className="todo-tag-chip">{category}</span></td>
+        <td className="todo-table-owner">{owner && <span><User size={12} /> {owner}</span>}</td>
+        <td className="todo-table-date">{node.date || ''}</td>
+      </tr>
+      {expanded && hasDetails && (
+        <tr className="todo-table-detail-row">
+          <td></td>
+          <td colSpan={4}>
+            <div className="todo-detail-content">
+              {node.desc && <p className="todo-detail-desc">{node.desc}</p>}
+              {due && <span className="todo-detail-tag due"><CalendarDays size={10} /> Due {due}</span>}
+              {file && <span className="todo-detail-tag file"><FileText size={10} /> {file}</span>}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 

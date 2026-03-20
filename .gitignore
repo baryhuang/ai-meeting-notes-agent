@@ -13,6 +13,11 @@ web/node_modules/
 web/dist/
 web/bun.lock
 
+# Electron / Desktop
+desktop/node_modules/
+desktop/dist/
+desktop/package-lock.json
+
 # Data & transcripts
 data/
 *.sqlite

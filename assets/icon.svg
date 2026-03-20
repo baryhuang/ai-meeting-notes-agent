@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="50%" stop-color="#16213e"/>
+      <stop offset="100%" stop-color="#0f3460"/>
+    </linearGradient>
+    <!-- Accent gradient -->
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e94560"/>
+      <stop offset="100%" stop-color="#ff6b6b"/>
+    </linearGradient>
+    <!-- Node glow -->
+    <linearGradient id="nodeGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#53c1de"/>
+      <stop offset="100%" stop-color="#7c5cfc"/>
+    </linearGradient>
+    <!-- Subtle inner shadow -->
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="228" ry="228" fill="url(#bg)"/>
+
+  <!-- Subtle grid pattern -->
+  <g opacity="0.06" stroke="#ffffff" stroke-width="1">
+    <line x1="200" y1="0" x2="200" y2="1024"/>
+    <line x1="400" y1="0" x2="400" y2="1024"/>
+    <line x1="600" y1="0" x2="600" y2="1024"/>
+    <line x1="800" y1="0" x2="800" y2="1024"/>
+    <line x1="0" y1="200" x2="1024" y2="200"/>
+    <line x1="0" y1="400" x2="1024" y2="400"/>
+    <line x1="0" y1="600" x2="1024" y2="600"/>
+    <line x1="0" y1="800" x2="1024" y2="800"/>
+  </g>
+
+  <!-- Connection lines (knowledge graph edges) -->
+  <g stroke="#53c1de" stroke-width="3" opacity="0.35">
+    <!-- Central hub to outer nodes -->
+    <line x1="512" y1="420" x2="320" y2="300"/>
+    <line x1="512" y1="420" x2="700" y2="310"/>
+    <line x1="512" y1="420" x2="280" y2="500"/>
+    <line x1="512" y1="420" x2="740" y2="490"/>
+    <line x1="512" y1="420" x2="350" y2="650"/>
+    <line x1="512" y1="420" x2="680" y2="640"/>
+    <!-- Cross connections -->
+    <line x1="320" y1="300" x2="280" y2="500"/>
+    <line x1="700" y1="310" x2="740" y2="490"/>
+    <line x1="280" y1="500" x2="350" y2="650"/>
+    <line x1="740" y1="490" x2="680" y2="640"/>
+  </g>
+
+  <!-- Outer knowledge nodes -->
+  <g filter="url(#softGlow)">
+    <circle cx="320" cy="300" r="22" fill="url(#nodeGlow)" opacity="0.9"/>
+    <circle cx="700" cy="310" r="18" fill="url(#nodeGlow)" opacity="0.8"/>
+    <circle cx="280" cy="500" r="16" fill="url(#nodeGlow)" opacity="0.7"/>
+    <circle cx="740" cy="490" r="20" fill="url(#nodeGlow)" opacity="0.85"/>
+    <circle cx="350" cy="650" r="15" fill="url(#nodeGlow)" opacity="0.75"/>
+    <circle cx="680" cy="640" r="17" fill="url(#nodeGlow)" opacity="0.8"/>
+  </g>
+
+  <!-- Central "OS" terminal/window shape -->
+  <g filter="url(#shadow)">
+    <!-- Terminal window body -->
+    <rect x="370" y="340" width="284" height="200" rx="16" ry="16" fill="#1a1a2e" stroke="#53c1de" stroke-width="3" opacity="0.95"/>
+    <!-- Title bar -->
+    <rect x="370" y="340" width="284" height="36" rx="16" ry="16" fill="#222244"/>
+    <rect x="370" y="360" width="284" height="16" fill="#222244"/>
+    <!-- Traffic light dots -->
+    <circle cx="396" cy="358" r="7" fill="#e94560"/>
+    <circle cx="418" cy="358" r="7" fill="#f5a623"/>
+    <circle cx="440" cy="358" r="7" fill="#7ec87e"/>
+  </g>
+
+  <!-- Terminal content: stylized text lines -->
+  <g opacity="0.9">
+    <rect x="394" y="396" width="100" height="6" rx="3" fill="#53c1de"/>
+    <rect x="500" y="396" width="60" height="6" rx="3" fill="#7c5cfc" opacity="0.7"/>
+    <rect x="394" y="416" width="70" height="6" rx="3" fill="#e94560" opacity="0.8"/>
+    <rect x="470" y="416" width="90" height="6" rx="3" fill="#53c1de" opacity="0.6"/>
+    <rect x="394" y="436" width="120" height="6" rx="3" fill="#7c5cfc" opacity="0.5"/>
+    <rect x="394" y="456" width="50" height="6" rx="3" fill="#53c1de" opacity="0.7"/>
+    <rect x="450" y="456" width="80" height="6" rx="3" fill="#e94560" opacity="0.6"/>
+    <!-- Cursor blink -->
+    <rect x="394" y="476" width="8" height="12" rx="1" fill="#53c1de" opacity="0.9"/>
+  </g>
+
+  <!-- Text at bottom -->
+  <text x="512" y="790" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="88" font-weight="700" letter-spacing="6" fill="white" opacity="0.95">COMPANY</text>
+  <text x="512" y="860" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-size="72" font-weight="300" letter-spacing="16" fill="#53c1de" opacity="0.8">OS</text>
+</svg>

@@ -1964,6 +1964,35 @@ body::before {
 .todo-table-row:hover { background: var(--surface2); }
 .todo-table-row.done { opacity: 0.55; }
 .todo-table-row.done .todo-table-name { text-decoration: line-through; color: var(--text3); }
+.todo-table-row.clickable { cursor: pointer; }
+.todo-table-row.expanded { background: var(--surface2); }
+.todo-row-chevron {
+  display: inline-block;
+  margin-left: 6px;
+  opacity: 0.4;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  vertical-align: middle;
+}
+.todo-row-chevron.expanded { transform: rotate(90deg); opacity: 0.7; }
+.todo-table-detail-row td {
+  padding: 0 14px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.todo-detail-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+}
+.todo-detail-content .todo-detail-desc {
+  width: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
 .todo-table-status { width: 32px; text-align: center; }
 .todo-table-name { font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-table-tag {}
@@ -2499,4 +2528,15 @@ body::before {
   /* ── Landscape header ── */
   .landscape-header h2 { font-size: 18px; }
   .landscape-toolbar { gap: 8px; }
+}
+
+/* ── Electron desktop: window drag region ── */
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+body.electron .app.layout-main {
+  padding-top: 28px;
 }

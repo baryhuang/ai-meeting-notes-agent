@@ -1,0 +1,54 @@
+{
+  "name": "company-os-desktop",
+  "version": "1.0.0",
+  "description": "Company OS — macOS desktop app",
+  "main": "main.js",
+  "productName": "Company OS",
+  "scripts": {
+    "dev": "NODE_ENV=development electron .",
+    "build": "electron-builder build --mac",
+    "dist:mac": "electron-builder build --mac dmg --x64 --arm64",
+    "postinstall": "cd ../web && bun install"
+  },
+  "build": {
+    "appId": "com.company-os.app",
+    "productName": "Company OS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "storage.js",
+      "package.json",
+      "../web/dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web/dist",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "../assets/icon.icns",
+      "category": "public.app-category.productivity",
+      "identity": null
+    },
+    "dmg": {
+      "title": "Company OS",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}

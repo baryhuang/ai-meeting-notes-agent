@@ -83,6 +83,8 @@ Unlike tools like [Operately](https://operately.com/) (goals and project trackin
 
 **Self-hosted, your API keys, your data.** Your most sensitive recordings — investor negotiations, co-founder disagreements, customer deal terms — are processed with your own API keys. No data leaves your infrastructure. Privacy-first by design — GDPR and HIPAA friendly.
 
+**Ships as a native macOS desktop app.** Not just a web tool — Company OS includes an Electron-based desktop app so your team can access the dashboard without running a dev server or opening a browser. Backend settings are configurable in-app.
+
 ---
 
 ## What's inside
@@ -114,7 +116,17 @@ uv run server/telegram_bot.py
 
 Send a voice memo to your Telegram bot. Get a speaker-labeled transcript back.
 
-### 2. Knowledge processing
+### 2. Desktop app (macOS)
+
+```bash
+make install   # install web + Electron deps
+make dev       # run Vite + Electron in dev mode
+make dmg       # build .dmg for distribution
+```
+
+Backend settings (InsForge URL, keys) are configurable in Settings within the app.
+
+### 3. Knowledge processing
 
 Transcripts get processed into your company's dimension structure. Start with whatever makes sense — the system evolves as your company does.
 
