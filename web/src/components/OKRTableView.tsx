@@ -201,6 +201,9 @@ export function OKRTableView({ treeData, timelineRange, onTimelineRangeChange }:
 
   return (
     <div className="okr-table-view">
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, padding: '24px 24px 0' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>OKR & KPIs</h2>
+      </div>
       <div className="view-tabs">
         {TAB_CONFIG.map(t => (
           <button

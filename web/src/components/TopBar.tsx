@@ -15,6 +15,10 @@ interface TopBarProps {
 }
 
 export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, onExpandLevel, timelineRange, onResetTimeline, onMenuToggle, onChatToggle }: TopBarProps) {
+  // Views that have their own header — hide the topbar title block
+  const viewsWithOwnHeader = new Set<ViewType>(['conversations', 'people', 'partners', 'okr', 'settings', 'tasks']);
+  const hideTitle = viewsWithOwnHeader.has(currentView);
+
   let title = 'Company OS';
   let desc = '8 dimensions + competitive evolution';
 
@@ -31,16 +35,11 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
   } else if (currentView === 'competitor') {
     title = 'Competitors';
     desc = 'Competitive landscape analysis';
-  } else if (currentView === 'tasks') {
-    title = 'Tasks';
-    desc = 'Semantic search across Linear tasks';
-  } else if (currentView === 'settings') {
-    title = 'Settings';
-    desc = 'Workspace sharing & configuration';
   }
 
   const showButtons = currentView === 'd3';
   const showTimelineToggle = ['todo', 'vem', 'd3', 'competitor', 'okr'].includes(currentView);
+  const showTopbar = !hideTitle || showButtons || showTimelineToggle;
   const isFiltered = timelineRange.startOrd !== null || timelineRange.endOrd !== null;
 
   const levelButtons = [
@@ -50,6 +49,10 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
     { label: 'All', value: -1 },
   ];
 
+  if (!showTopbar) {
+    return null;
+  }
+
   return (
     <div className="topbar">
       {onMenuToggle && (
@@ -57,10 +60,12 @@ export function TopBar({ currentView, currentDimIndex, dimensions, expandLevel, 
           <Menu size={18} />
         </button>
       )}
-      <div className="topbar-title-block">
-        <h1>{title}</h1>
-        <div className="desc">{desc}</div>
-      </div>
+      {!hideTitle && (
+        <div className="topbar-title-block">
+          <h1>{title}</h1>
+          <div className="desc">{desc}</div>
+        </div>
+      )}
       <div className="actions">
         {showButtons && (
           <>
