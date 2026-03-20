@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ChevronRight, Circle, CheckCircle2, Clock, Mail, CalendarCheck, Settings2, XCircle, User, CalendarDays, FileText } from 'lucide-react';
 import { collectDates, parseDateOrdinal, TimelineBar } from './MarkmapView';
 import { findDateIndex } from '../hooks/useTimelineCutoff';
@@ -9,6 +9,7 @@ import type { TreeNode } from '../types';
 interface TodoViewProps {
   treeData: TreeNode;
   userId: string;
+  onRefetch: () => Promise<void>;
   timelineRange: TimelineRange;
   onTimelineRangeChange: (range: Partial<TimelineRange>) => void;
 }
@@ -150,6 +151,57 @@ function SectionHeader({ icon, label, count, expanded, onToggle }: {
   );
 }
 
+function getOwner(node: TreeNode): string {
+  return (node.owner as string | undefined) || 'Unassigned';
+}
+
+function groupByOwner(items: FlatItem[]): { owner: string; items: FlatItem[] }[] {
+  const map = new Map<string, FlatItem[]>();
+  for (const item of items) {
+    const owner = getOwner(item.node);
+    if (!map.has(owner)) map.set(owner, []);
+    map.get(owner)!.push(item);
+  }
+  // Sort: assigned owners alphabetically, "Unassigned" last
+  return [...map.entries()]
+    .sort(([a], [b]) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b);
+    })
+    .map(([owner, items]) => ({ owner, items }));
+}
+
+function OwnerSubHeader({ owner, count }: { owner: string; count: number }) {
+  return (
+    <tr className="todo-table-owner-row">
+      <td colSpan={5}>
+        <div className="todo-table-owner-header">
+          <User size={12} />
+          <span>{owner}</span>
+          <span className="todo-category-count">{count}</span>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function SectionItems({ items, onStatusChange }: { items: FlatItem[]; onStatusChange: (node: TreeNode, newStatus: string) => void }) {
+  const groups = useMemo(() => groupByOwner(items), [items]);
+  return (
+    <>
+      {groups.map((g) => (
+        <React.Fragment key={g.owner}>
+          <OwnerSubHeader owner={g.owner} count={g.items.length} />
+          {g.items.map((item, i) => (
+            <ItemRow key={i} item={item} onStatusChange={onStatusChange} />
+          ))}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
 function ItemRow({ item, onStatusChange }: { item: FlatItem; onStatusChange: (node: TreeNode, newStatus: string) => void }) {
   const { node, category } = item;
   const owner = node.owner as string | undefined;
@@ -179,7 +231,7 @@ function ItemRow({ item, onStatusChange }: { item: FlatItem; onStatusChange: (no
   );
 }
 
-export function TodoView({ treeData, userId, timelineRange, onTimelineRangeChange }: TodoViewProps) {
+export function TodoView({ treeData, userId, onRefetch, timelineRange, onTimelineRangeChange }: TodoViewProps) {
   const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({});
 
   const handleStatusChange = useCallback(async (node: TreeNode, newStatus: string) => {
@@ -191,6 +243,10 @@ export function TodoView({ treeData, userId, timelineRange, onTimelineRangeChang
     setStatusOverrides(prev => ({ ...prev, [path]: newStatus }));
     try {
       await updateNodeStatus(userId, dimension, path, newStatus);
+      // Refetch to get fresh data from DB
+      await onRefetch();
+      // Clear overrides since tree data is now fresh
+      setStatusOverrides({});
     } catch (err) {
       console.error('Failed to update status:', err);
       // Revert on error
@@ -200,7 +256,7 @@ export function TodoView({ treeData, userId, timelineRange, onTimelineRangeChang
         return next;
       });
     }
-  }, [userId]);
+  }, [userId, onRefetch]);
   const allDates = useMemo(() => collectDates(treeData), [treeData]);
 
   const initialStart = timelineRange.startOrd != null && allDates.length > 0
@@ -300,9 +356,7 @@ export function TodoView({ treeData, userId, timelineRange, onTimelineRangeChang
               expanded={todoExpanded}
               onToggle={() => setTodoExpanded(!todoExpanded)}
             />
-            {todoExpanded && activeItems.map((item, i) => (
-              <ItemRow key={`a-${i}`} item={item} onStatusChange={handleStatusChange} />
-            ))}
+            {todoExpanded && <SectionItems items={activeItems} onStatusChange={handleStatusChange} />}
             <SectionHeader
               icon={<Clock size={16} />}
               label="Pending"
@@ -310,9 +364,7 @@ export function TodoView({ treeData, userId, timelineRange, onTimelineRangeChang
               expanded={pendingExpanded}
               onToggle={() => setPendingExpanded(!pendingExpanded)}
             />
-            {pendingExpanded && pendingItems.map((item, i) => (
-              <ItemRow key={`p-${i}`} item={item} onStatusChange={handleStatusChange} />
-            ))}
+            {pendingExpanded && <SectionItems items={pendingItems} onStatusChange={handleStatusChange} />}
             <SectionHeader
               icon={<CheckCircle2 size={16} />}
               label="Done"
@@ -320,9 +372,7 @@ export function TodoView({ treeData, userId, timelineRange, onTimelineRangeChang
               expanded={doneExpanded}
               onToggle={() => setDoneExpanded(!doneExpanded)}
             />
-            {doneExpanded && doneItems.map((item, i) => (
-              <ItemRow key={`d-${i}`} item={item} onStatusChange={handleStatusChange} />
-            ))}
+            {doneExpanded && <SectionItems items={doneItems} onStatusChange={handleStatusChange} />}
           </tbody>
         </table>
       </div>

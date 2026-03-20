@@ -87,5 +87,14 @@ export function useAtlasData(userId: string): AtlasData {
     return () => { cancelled = true; };
   }, [userId]);
 
-  return { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, loading, error };
+  const refetchTasks = async () => {
+    try {
+      const data = await fetchDimensionData(userId, 'tasks');
+      setTasksData(data);
+    } catch (err) {
+      console.error('Failed to refetch tasks:', err);
+    }
+  };
+
+  return { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, loading, error, refetchTasks };
 }

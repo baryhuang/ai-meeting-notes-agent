@@ -1976,6 +1976,9 @@ body::before {
   border: 1px solid var(--border);
   color: var(--text2);
   white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .todo-table-owner {
   color: var(--text2);
@@ -2022,6 +2025,21 @@ body::before {
 }
 .todo-table-section-header:hover { background: var(--border); }
 .todo-table-section-label { flex: 1; }
+
+.todo-table-owner-row td {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+.todo-table-owner-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 6px 28px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text3);
+  background: var(--surface);
+}
 
 /* ── Done Section ────────────────────────────── */
 .todo-done-section {

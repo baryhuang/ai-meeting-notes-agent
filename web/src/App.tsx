@@ -27,7 +27,7 @@ function AuthenticatedApp() {
   const { user } = useUser();
   const { workspace, workspaces, loading: wsLoading, needsPicker, selectWorkspace } = useWorkspace(user ?? null);
   const userId = workspace?.ownerId ?? user!.id;
-  const { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, loading, error } = useAtlasData(userId);
+  const { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, loading, error, refetchTasks } = useAtlasData(userId);
   const [currentView, setCurrentView] = useState<ViewType>('todo');
   const [currentDimIndex, setCurrentDimIndex] = useState(0);
   const [expandLevel, setExpandLevel] = useState(-1);
@@ -119,7 +119,7 @@ function AuthenticatedApp() {
             />
 
           {currentView === 'todo' && tasksData && (
-            <TodoView treeData={tasksData} userId={userId} timelineRange={timelineRange} onTimelineRangeChange={setTimelineRange} />
+            <TodoView treeData={tasksData} userId={userId} onRefetch={refetchTasks} timelineRange={timelineRange} onTimelineRangeChange={setTimelineRange} />
           )}
 
           {currentView === 'conversations' && conversationsData && (
