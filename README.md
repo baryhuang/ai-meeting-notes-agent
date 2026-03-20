@@ -10,6 +10,10 @@ Code goes in GitHub. Tasks go in Linear. But the verbal decisions, customer insi
 
 **Company OS is that system of record.** A conversation intelligence platform that captures institutional knowledge, tracks decisions, and turns unstructured voice memos and meeting recordings into a searchable, structured second brain for your entire team.
 
+## Dashboard preview
+
+![Company OS dashboard](docs/images/dashboard-chat.png)
+
 ### Built with
 
 [**BubbleLab**](https://github.com/bubblelabai/BubbleLab) — AI workflow engine for file sync, transcription routing, and processing pipelines
