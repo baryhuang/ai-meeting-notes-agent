@@ -1975,6 +1975,88 @@ body::before {
   font-size: 13px; color: var(--text3);
   font-style: italic;
 }
+
+/* Search bar — unified: local filter as-you-type + AI on Enter */
+.conv-search-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 16px; position: relative;
+}
+.conv-search-icon {
+  position: absolute; left: 10px; color: var(--text3); pointer-events: none;
+}
+.conv-search-bar input {
+  flex: 1; padding: 9px 32px 9px 32px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text); font-size: 13px;
+  outline: none; transition: border-color 0.15s;
+}
+.conv-search-bar input:focus { border-color: var(--purple); }
+.conv-search-clear {
+  position: absolute; right: 120px;
+  background: none; border: none; color: var(--text3); cursor: pointer;
+  display: flex; align-items: center; padding: 2px;
+}
+.conv-search-clear:hover { color: var(--text); }
+.conv-ai-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 8px 14px; border-radius: 8px;
+  border: 1px solid var(--purple); background: var(--purple); color: #fff;
+  font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: opacity 0.15s, transform 0.15s; flex-shrink: 0;
+}
+.conv-ai-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+.conv-ai-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.conv-ai-spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+  border-radius: 50%; animation: conv-spin 0.6s linear infinite;
+}
+@keyframes conv-spin { to { transform: rotate(360deg); } }
+
+.conv-ai-error {
+  font-size: 12px; color: var(--red); margin-bottom: 12px;
+}
+
+/* AI result panel */
+.conv-ai-result {
+  background: var(--surface); border: 1px solid var(--purple);
+  border-radius: 12px; padding: 16px; margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(95,77,153,0.12);
+}
+.conv-ai-result-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.conv-ai-result-header h3 {
+  font-size: 14px; font-weight: 600; color: var(--text); margin: 0;
+}
+.conv-ai-close {
+  background: none; border: none; color: var(--text3); cursor: pointer;
+  display: flex; align-items: center; padding: 4px;
+}
+.conv-ai-close:hover { color: var(--text); }
+.conv-ai-summary {
+  font-size: 12.5px; color: var(--text2); margin-bottom: 12px; line-height: 1.5;
+}
+.conv-ai-table-wrap {
+  overflow-x: auto; border-radius: 8px; border: 1px solid var(--border);
+}
+.conv-ai-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.conv-ai-table th {
+  text-align: left; padding: 8px 12px;
+  background: var(--surface2); color: var(--text2);
+  font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
+  border-bottom: 1px solid var(--border);
+}
+.conv-ai-table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  color: var(--text); line-height: 1.4;
+}
+.conv-ai-table tr:last-child td { border-bottom: none; }
+.conv-ai-table tr:hover td { background: var(--surface2); }
+
 /* File buttons */
 .conv-files {
   display: flex; flex-direction: column; gap: 4px;

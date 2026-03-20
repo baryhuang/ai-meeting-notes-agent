@@ -273,6 +273,89 @@ export async function queryCompetitorsAI(query: string, competitors: CompetitorR
   };
 }
 
+export async function queryConversationsAI(query: string, conversations: { date: string; name: string; time?: string; type?: string; participants?: string; desc?: string }[]): Promise<AIQueryResult> {
+  const resp = await fetch(DO_AI_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DO_AI_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'anthropic-claude-4.5-sonnet',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a meeting intelligence analyst. You have access to a conversation/meeting log database. Given a user query, analyze the conversations and return relevant results using the display_conversations tool. Choose the most informative columns (max 5) based on the query. Always include the conversation name as the first column. Be concise in cell values. Answer in the same language as the query.`,
+        },
+        {
+          role: 'user',
+          content: `Query: ${query}\n\nConversation database (${conversations.length} conversations):\n${JSON.stringify(conversations, null, 0)}`,
+        },
+      ],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'display_conversations',
+            description: 'Display a structured table of conversations matching the query',
+            parameters: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Short title describing the results' },
+                columns: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      header: { type: 'string' },
+                      key: { type: 'string' },
+                    },
+                    required: ['header', 'key'],
+                  },
+                  maxItems: 5,
+                },
+                rows: {
+                  type: 'array',
+                  items: { type: 'object', additionalProperties: { type: 'string' } },
+                },
+                summary: { type: 'string', description: 'Brief analytical summary of the findings' },
+              },
+              required: ['title', 'columns', 'rows'],
+            },
+          },
+        },
+      ],
+      tool_choice: { type: 'function', function: { name: 'display_conversations' } },
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`AI query failed: ${resp.status} ${errText}`);
+  }
+
+  const data = await resp.json();
+  const choice = data.choices?.[0];
+  const toolCall = choice?.message?.tool_calls?.[0];
+
+  if (!toolCall || toolCall.function.name !== 'display_conversations') {
+    const content = choice?.message?.content || '';
+    return {
+      title: 'AI Response',
+      columns: [{ header: 'Response', key: 'response' }],
+      rows: [{ response: content }],
+    };
+  }
+
+  const args = JSON.parse(toolCall.function.arguments);
+  return {
+    title: args.title || 'Results',
+    columns: args.columns || [],
+    rows: args.rows || [],
+    summary: args.summary,
+  };
+}
+
 function mapCompetitorRows(rows: Record<string, unknown>[]): CompetitorRow[] {
   return rows.map(r => {
     const { added_date, ...rest } = r as Record<string, unknown> & { added_date?: string };
