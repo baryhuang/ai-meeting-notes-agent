@@ -18,9 +18,22 @@ Code goes in GitHub. Tasks go in Linear. But the verbal decisions, customer insi
 
 [**BubbleLab**](https://github.com/bubblelabai/BubbleLab) — AI workflow engine for file sync, transcription routing, and processing pipelines
 
-[**OpenAgents**](https://openagents.org) — Hosts Claude Cowork in the cloud. Admin operation interface + team chat with your knowledge base
-
 [**InsForge**](https://insforge.dev) — AI-native backend: database, auth, storage, edge functions
+
+### Two ways to chat with your knowledge base
+
+Company OS supports two approaches for the AI agent that powers team chat and knowledge processing. Choose the one that fits your setup:
+
+| | **OpenAgents Workspace** | **Claude Code Channels** |
+|---|---|---|
+| **What it is** | Cloud-hosted Claude Cowork agent on [OpenAgents](https://openagents.org) | Official Claude Code remote agent via [Claude Code Channels](https://docs.anthropic.com/en/docs/claude-code) |
+| **How it connects** | OpenAgents cloud → your dashboard | Local Claude Code CLI ↔ channel server ↔ your dashboard |
+| **Auth** | OpenAgents account | claude.ai login (no API key needed) |
+| **Best for** | Teams wanting a managed, always-on cloud agent | Developers who want Claude Code's full tool access and local codebase awareness |
+| **Setup** | Deploy workspace on OpenAgents | Run `channel-server` locally + launch Claude Code with `--dangerously-load-development-channels` |
+| **Persistence** | Cloud-managed | Ephemeral (messages live in memory only) |
+
+You can switch between the two backends at any time in the dashboard Settings panel — no restart required.
 
 ---
 
@@ -47,7 +60,14 @@ flowchart TD
     C --> D[Claude Cowork]
     D --> E[InsForge - db/auth/storage]
     F[Linear - tasks] --> E
-    G[OpenAgents] --> D
+
+    subgraph Backends["Chat Backend (choose one)"]
+        G[OpenAgents Workspace — cloud agent]
+        K[Claude Code Channels — local agent]
+    end
+
+    G --> D
+    K --> D
 
     subgraph UI["User Interfaces"]
         H[Founder Dashboard]
@@ -57,13 +77,13 @@ flowchart TD
 
     H --> E
     I --> G
-    J --> G
+    J --> Backends
 ```
 **Record** — Send a voice memo to Telegram, drop a Zoom meeting recording, or any audio file. Get a transcript back with speaker diarization (speaker labels) in under a minute. Works with any language — auto-detected.
 
 **Structure** — AI processes transcripts into your company's knowledge dimensions. Not a fixed template — the dimensions emerge from your actual conversations. A healthcare startup ends up with `market/`, `validation/`, `regulatory/`. A fintech startup gets `compliance/`, `partnerships/`, `unit-economics/`. Your company, your structure.
 
-**Ask** — Team members chat with the knowledge base directly. No need to open a terminal or remember where things are — just ask "who did we talk to about X?" or "what did we decide about Y?" and get answers grounded in your actual conversations. [OpenAgents](https://openagents.org) hosts the Claude Cowork in the cloud and provides both the admin operation interface and the team chat interface.
+**Ask** — Team members chat with the knowledge base directly. No need to open a terminal or remember where things are — just ask "who did we talk to about X?" or "what did we decide about Y?" and get answers grounded in your actual conversations. Two backends are supported: **OpenAgents Workspace** (cloud-hosted agent with admin interface) or **Claude Code Channels** (local Claude Code agent connected via the built-in channel server). Switch between them in Settings.
 
 **Execute** — Tasks sync from Linear into the dashboard. Search across all tasks semantically to find what's relevant.
 
@@ -94,7 +114,7 @@ Unlike tools like [Operately](https://operately.com/) (goals and project trackin
 | **Input** | Voice memos, Zoom meetings, recordings, documents | Telegram bot + BubbleLab |
 | **Transcription** | Speaker-labeled transcripts with diarization | AssemblyAI (auto language detection) |
 | **File sync** | All files centralized in one place | [BubbleLab](https://github.com/bubblelabai/BubbleLab) workflows → Google Drive + S3 |
-| **Knowledge processing** | Conversations → structured knowledge dimensions; team Q&A | [OpenAgents](https://openagents.org) — hosts Claude Cowork in the cloud, provides admin operation + team chat |
+| **Knowledge processing** | Conversations → structured knowledge dimensions; team Q&A | [OpenAgents Workspace](https://openagents.org) (cloud agent) or [Claude Code Channels](https://docs.anthropic.com/en/docs/claude-code) (local agent) |
 | **Backend** | Database, auth, storage, API | [InsForge](https://insforge.dev) — AI-native backend |
 | **Execution** | Task sync + semantic search | Linear → InsForge (edge function) |
 | **Visualization** | Per-user dashboards, vibe-coded by each team member | React primitives + shared components — **help wanted** |
@@ -165,7 +185,19 @@ Get started with just two free API keys: [Telegram BotFather](https://t.me/BotFa
 
 ---
 
-## Claude Code Channel Integration
+## Chat Backend Setup
+
+### Approach 1: OpenAgents Workspace (cloud agent)
+
+The default approach. [OpenAgents](https://openagents.org) hosts a Claude Cowork agent in the cloud, providing:
+
+- **Always-on cloud agent** — no local process to manage
+- **Admin operation interface** — manage your workspace, agent configuration, and context
+- **Team chat** — any team member can query the knowledge base from the dashboard
+
+To set up: create a workspace on [OpenAgents](https://openagents.org), configure it with your Company Brain context and CLAUDE.md, and point your dashboard to it in Settings.
+
+### Approach 2: Claude Code Channels (local agent)
 
 Company OS includes a built-in channel server that lets Claude Code agents communicate directly with the web dashboard in real time — no API key required, just your claude.ai login.
 
@@ -210,14 +242,14 @@ Web Dashboard  ──HTTP──►  channel-server (port 8787)  ──stdio─�
 
 Messages are ephemeral — the ring buffer lives only in memory and is tied to the channel server's process lifetime.
 
-### Switching backends
+### Switching between approaches
 
 The Settings panel includes a **Chat Backend** toggle:
 
-- **OpenAgents** (default) — uses the OpenAgents cloud agent for chat
-- **Channel** — uses the local Claude Code channel server
+- **OpenAgents** (default) — uses the OpenAgents cloud agent (Approach 1)
+- **Channel** — uses the local Claude Code channel server (Approach 2)
 
-The selection persists across page refreshes. You can switch back to OpenAgents at any time without restarting anything. If the channel server is unavailable, the dashboard shows an inline status indicator and disables the send button until the server is reachable again.
+The selection persists across page refreshes. You can switch between approaches at any time without restarting anything. If the channel server is unavailable, the dashboard shows an inline status indicator and disables the send button until the server is reachable again.
 
 ### Environment variables (channel server)
 
