@@ -101,7 +101,7 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
           const viewMap: Record<string, ViewType> = { okr_kpi: 'okr', competitor: 'competitor', 'strategic-partners': 'partners', 'people-network': 'people' };
           const view = viewMap[dim.id];
           const label = dim.id === 'people-network' ? 'People' : dim.title;
-          return (
+          return [
             <div
               key={dim.id}
               className={`nav-item${currentView === view ? ' active' : ''}`}
@@ -109,8 +109,18 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
             >
               <span className="icon">{dim.icon}</span>
               {label}
-            </div>
-          );
+            </div>,
+            dim.id === 'okr_kpi' && (
+              <div
+                key="customer-discovery"
+                className={`nav-item${currentView === 'customer-discovery' ? ' active' : ''}`}
+                onClick={() => handleClick('customer-discovery')}
+              >
+                <span className="icon">{'\uD83D\uDD0D'}</span>
+                Customer Discovery
+              </div>
+            ),
+          ];
         })}
 
         {grouped.map(({ group, label, items }) => (

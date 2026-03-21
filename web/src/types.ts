@@ -149,7 +149,7 @@ export interface AppointmentsData {
   appointments: Appointment[];
 }
 
-export type ViewType = 'todo' | 'conversations' | 'd3' | 'competitor' | 'tasks' | 'vem' | 'partners' | 'okr' | 'people' | 'settings';
+export type ViewType = 'todo' | 'conversations' | 'd3' | 'competitor' | 'tasks' | 'vem' | 'partners' | 'okr' | 'people' | 'customer-discovery' | 'settings';
 
 export interface WorkspaceMember {
   owner_id: string;

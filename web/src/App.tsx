@@ -15,6 +15,7 @@ import { AppointmentsView } from './components/AppointmentsView';
 import { VEMDocumentView } from './components/VEMDocumentView';
 import { PartnersView } from './components/PartnersView';
 import { OKRTableView } from './components/OKRTableView';
+import { CustomerDiscoveryView } from './components/CustomerDiscoveryView';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { SettingsView } from './components/SettingsView';
 import { LandingPage } from './components/LandingPage';
@@ -27,7 +28,7 @@ function AuthenticatedApp() {
   const { user } = useUser();
   const { workspace, workspaces, loading: wsLoading, needsPicker, selectWorkspace } = useWorkspace(user ?? null);
   const userId = workspace?.ownerId ?? user!.id;
-  const { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, loading, error, refetchTasks } = useAtlasData(userId);
+  const { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, customerDiscoveryData, loading, error, refetchTasks } = useAtlasData(userId);
   const [currentView, setCurrentView] = useState<ViewType>('todo');
   const [currentDimIndex, setCurrentDimIndex] = useState(0);
   const [expandLevel, setExpandLevel] = useState(-1);
@@ -166,6 +167,10 @@ function AuthenticatedApp() {
 
           {currentView === 'okr' && dimensionsData['okr_kpi'] && (
             <OKRTableView treeData={dimensionsData['okr_kpi']} timelineRange={timelineRange} onTimelineRangeChange={setTimelineRange} />
+          )}
+
+          {currentView === 'customer-discovery' && customerDiscoveryData && (
+            <CustomerDiscoveryView treeData={customerDiscoveryData} />
           )}
 
           {currentView === 'tasks' && (

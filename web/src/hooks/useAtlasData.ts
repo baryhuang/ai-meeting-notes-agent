@@ -10,6 +10,7 @@ interface AtlasData {
   appointmentsData: AppointmentsData | null;
   tasksData: TreeNode | null;
   conversationsData: TreeNode | null;
+  customerDiscoveryData: TreeNode | null;
   loading: boolean;
   error: string | null;
 }
@@ -22,6 +23,7 @@ export function useAtlasData(userId: string): AtlasData {
   const [appointmentsData, setAppointmentsData] = useState<AppointmentsData | null>(null);
   const [tasksData, setTasksData] = useState<TreeNode | null>(null);
   const [conversationsData, setConversationsData] = useState<TreeNode | null>(null);
+  const [customerDiscoveryData, setCustomerDiscoveryData] = useState<TreeNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +50,7 @@ export function useAtlasData(userId: string): AtlasData {
         fetchAppointmentsData(userId).then(data => ({ id: '__appointments__', data })).catch(() => ({ id: '__appointments__', data: null })),
         fetchDimensionData(userId, 'tasks').then(data => ({ id: '__tasks__', data })).catch(() => ({ id: '__tasks__', data: null })),
         fetchDimensionData(userId, 'conversations').then(data => ({ id: '__conversations__', data })).catch(() => ({ id: '__conversations__', data: null })),
+        fetchDimensionData(userId, 'customer_discovery').then(data => ({ id: '__customer_discovery__', data })).catch(() => ({ id: '__customer_discovery__', data: null })),
       ]);
 
       if (cancelled) return;
@@ -64,6 +67,8 @@ export function useAtlasData(userId: string): AtlasData {
           setTasksData(r.data as TreeNode);
         } else if (r.id === '__conversations__') {
           setConversationsData(r.data as TreeNode);
+        } else if (r.id === '__customer_discovery__') {
+          setCustomerDiscoveryData(r.data as TreeNode);
         } else if (r.data) {
           dataMap[r.id] = r.data as TreeNode;
         }
@@ -96,5 +101,5 @@ export function useAtlasData(userId: string): AtlasData {
     }
   };
 
-  return { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, loading, error, refetchTasks };
+  return { dimensions, dimensionsData, landscapeData, progressData, appointmentsData, tasksData, conversationsData, customerDiscoveryData, loading, error, refetchTasks };
 }
