@@ -12,7 +12,7 @@ Code goes in GitHub. Tasks go in Linear. But the verbal decisions, customer insi
 
 ## Dashboard preview
 
-![Company OS dashboard](docs/images/dashboard-chat.png)
+![Company OS dashboard](docs/images/dashboard_chat.png)
 
 ### Built with
 
