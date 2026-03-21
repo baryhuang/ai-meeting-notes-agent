@@ -10,7 +10,7 @@ Company OS is that system of record.
 
 ## Dashboard preview
 
-![Company OS dashboard](docs/images/dashboard-chat.png)
+![Company OS dashboard](docs/images/dashboard_chat.png)
 
 ### Built with
 
