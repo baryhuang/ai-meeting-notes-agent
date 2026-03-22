@@ -233,11 +233,20 @@ function ProtectedDashboard() {
   return <AuthenticatedApp />;
 }
 
+function HomeRoute() {
+  const { user, isLoaded } = useUser();
+  const isMobile = window.innerWidth <= 767;
+  if (isLoaded && user && isMobile) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <LandingPage />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={isElectron ? <ProtectedDashboard /> : <LandingPage />} />
+        <Route path="/" element={isElectron ? <ProtectedDashboard /> : <HomeRoute />} />
         <Route path="/dashboard" element={<ProtectedDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

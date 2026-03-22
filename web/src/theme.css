@@ -2425,6 +2425,24 @@ body::before {
   .todo-item { padding-left: 36px; }
   .gantt-header { padding: 0 16px; }
 
+  /* ── Todo table mobile: hide tag/owner/date, show name as primary ── */
+  .todo-table { table-layout: auto; }
+  .todo-table thead th:nth-child(3),
+  .todo-table thead th:nth-child(4),
+  .todo-table thead th:nth-child(5) { display: none; }
+  .todo-table-row .todo-table-tag,
+  .todo-table-row .todo-table-owner,
+  .todo-table-row .todo-table-date { display: none; }
+  .todo-table-detail-row .todo-table-tag,
+  .todo-table-detail-row .todo-table-owner,
+  .todo-table-detail-row .todo-table-date { display: none; }
+  .todo-table-detail-row td[colspan="4"] { display: table-cell; }
+  .todo-table-name {
+    white-space: normal;
+    word-break: break-word;
+    font-size: 13px;
+  }
+
   /* ── View tabs ── */
   .view-tabs {
     padding: 0 16px;
