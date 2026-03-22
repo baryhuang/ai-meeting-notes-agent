@@ -30,27 +30,6 @@ export interface TreeNode {
   _dimension?: string;
 }
 
-export interface Competitor {
-  name: string;
-  category: string;
-  threat: 'high' | 'medium' | 'low';
-}
-
-export interface CompetitorStage {
-  id: string;
-  name: string;
-  date: string;
-  scope: string;
-  competitors: Competitor[];
-  total: number;
-  white_space: string;
-  our_position: string;
-}
-
-export interface CompetitorData {
-  stages: CompetitorStage[];
-}
-
 export interface CompetitorRow {
   name: string;
   section: string;

@@ -1,4 +1,4 @@
-import type { DimensionMeta, TreeNode, CompetitorData, LandscapeData, LandscapeMeta, CompetitorRow, LinearTask, AIQueryResult, AppointmentsData, WorkspaceMember } from './types';
+import type { DimensionMeta, TreeNode, LandscapeData, LandscapeMeta, CompetitorRow, LinearTask, AIQueryResult, AppointmentsData, WorkspaceMember } from './types';
 import { insforge } from './insforge';
 import { assembleTree } from './assembleTree';
 
@@ -125,10 +125,6 @@ export async function fetchDimensions(userId: string): Promise<DimensionMeta[]> 
 
 export async function fetchDimensionData(userId: string, name: string): Promise<TreeNode> {
   return dbSelectNodes(userId, name);
-}
-
-export async function fetchCompetitorData(userId: string): Promise<CompetitorData> {
-  return dbSelect<CompetitorData>(userId, 'competitor');
 }
 
 export async function fetchProgressData(userId: string): Promise<TreeNode> {
