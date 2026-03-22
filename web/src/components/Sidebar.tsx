@@ -123,37 +123,20 @@ export function Sidebar({ dimensions, currentView, currentDimIndex, onSwitch, op
           ];
         })}
 
-        {grouped.map(({ group, label, items }) => (
-          <div key={group}>
-            <div className="nav-section">{label}</div>
-            {items.map(({ dim, index }) => {
-              // Skip — already shown as doc view above
-              if (dim.id === 'vision_execution_map') return null;
-              if (dim.id === 'task_search') {
-                return (
-                  <div
-                    key={dim.id}
-                    className={`nav-item${currentView === 'tasks' ? ' active' : ''}`}
-                    onClick={() => handleClick('tasks')}
-                  >
-                    <span className="icon">{dim.icon}</span>
-                    {dim.title}
-                  </div>
-                );
-              }
-              return (
-                <div
-                  key={dim.id}
-                  className={`nav-item${currentView === 'd3' && currentDimIndex === index ? ' active' : ''}`}
-                  onClick={() => handleClick('d3', index)}
-                >
-                  <span className="icon">{dim.icon}</span>
-                  {dim.title}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+        {grouped.flatMap(({ items }) =>
+          items.filter(({ dim }) =>
+            !['vision_execution_map', 'customer_discovery', 'tasks', 'conversations'].includes(dim.id)
+          ).map(({ dim, index }) => (
+            <div
+              key={dim.id}
+              className={`nav-item${currentView === 'd3' && currentDimIndex === index ? ' active' : ''}`}
+              onClick={() => handleClick('d3', index)}
+            >
+              <span className="icon">{dim.icon}</span>
+              {dim.title}
+            </div>
+          ))
+        )}
       </div>
 
       <div className="sidebar-footer">
